@@ -1,0 +1,36 @@
+# ═══ SECRETOS: nunca commitear claves ═══
+# config.py tiene las API keys hardcodeadas (Mistral, fish.audio, correo).
+# Copia config.example.py → config.py en cada máquina y pega ahí tus claves.
+config.py
+.env
+*.env
+*.key
+*.pem
+*secret*
+*credential*
+# ajustes personales que NEXUS guarda (viven en ~, por si acaso caen aquí)
+nexus_ajustes.json
+nexus_tareas.json
+nexus_habitos.json
+nexus_*.json
+
+# ═══ Python ═══
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# ═══ runtime de NEXUS (audio/vistas temporales si caen en el repo) ═══
+*.log
+*.mp3
+*.wav
+*.ogg
+nexus_vista_*.jpg
+
+# ═══ sistema operativo ═══
+.DS_Store
+Thumbs.db
+desktop.ini

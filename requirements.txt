@@ -1,0 +1,14 @@
+openai>=1.50
+openwakeword>=0.6   # onnxruntime entra como dependencia; ojo: en Windows NO uses tflite
+faster-whisper>=1.1
+sounddevice>=0.5
+numpy>=1.26
+pygame>=2.5
+edge-tts>=7.0
+psutil>=6.0
+requests>=2.31
+pycaw>=20240210
+comtypes>=1.4
+python-docx>=1.1
+keyboard>=0.13        # hotkey global Ctrl+Alt+Espacio para despertar a NEXUS
+Pillow>=10.0          # LOS OJOS: capturas de pantalla para que el cerebro vea
