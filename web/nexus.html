@@ -14,6 +14,11 @@
   /* look (pestaña Ajustes): JS los pisa con lo guardado en nexus_ajustes.json */
   --cuerpo:#F8F4E8; --cuerpo2:#E1D8C1; --ojos-c:#141414;
   --notch:#05070d; --acento:#38bdf8; --acento-rgb:56,189,248;
+  --panel:#0a1120;   /* fondo del panel (JS lo pisa con el tema) */
+  /* color independiente de cada cosmético (vacío = seguir al acento;
+     JS siempre pone un hex concreto aquí) */
+  --cosm-sombrero:var(--acento); --cosm-gafas:var(--acento);
+  --cosm-extra:var(--acento);
 }
 *{margin:0;padding:0;box-sizing:border-box}
 /* ventana del panel OCULTA: se pausan animaciones (menos CPU) */
@@ -22,6 +27,15 @@ html,body{background:transparent;overflow:hidden;
   font-family:'Segoe UI',system-ui,sans-serif;color:var(--texto)}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
 input{font-family:inherit;outline:none}
+
+/* ventanas frameless 100% ESTÁTICAS: no se arrastran con el ratón
+   (arrastrar un control movía la ventana y rompía el slider del
+   notch). La posición fija se elige con los chips izquierda/centro/
+   derecha (hpos) */
+#notch, body, #panel{-webkit-app-region:no-drag}
+#panel .cab button, #panel .cab input, #panel .cab .chips,
+#panel .cab .modo, #panel button, #panel input, #panel select,
+#panel nav{-webkit-app-region:no-drag}
 
 /* ══════════════ EL NOTCH ══════════════ */
 #notch{
@@ -32,7 +46,8 @@ input{font-family:inherit;outline:none}
   box-shadow:0 7px 24px rgba(0,0,0,.6),0 0 0 1px rgba(var(--acento-rgb),.10),
               inset 0 -1px 0 rgba(255,255,255,.03);
   display:flex;align-items:center;justify-content:center;gap:14px;
-  transition:width .38s var(--ease),box-shadow .3s;
+  transition:width .38s var(--ease),box-shadow .3s,transform .25s var(--ease);
+  transform-origin:top center;   /* JS pone translateX(-50%) scale(notch_s) */
   cursor:pointer;z-index:10;
 }
 #notch:hover{box-shadow:0 9px 28px rgba(0,0,0,.7),
@@ -125,6 +140,32 @@ body.barra #notch:hover{box-shadow:0 6px 18px rgba(0,0,0,.55),
 .sonrisa{opacity:0;transition:opacity .18s}
 #notch.happy .sonrisa, .m-grande.happy .sonrisa{opacity:1}
 
+/* posición fija horizontal (hpos): izquierda / centro / derecha */
+body.hizq #notch{left:20px}
+body.hder #notch{left:auto;right:20px}
+body.hizq #panel{left:8px;transform:translateY(-8px)}
+body.hizq #panel.abierto{transform:translateY(0)}
+body.hder #panel{left:auto;right:8px;transform:translateY(-8px)}
+body.hder #panel.abierto{transform:translateY(0)}
+
+/* sets de animación de la mascota (elegidos en Ajustes) */
+@keyframes saltar{0%,100%{transform:translateY(0)}35%{transform:translateY(-9%)}60%{transform:translateY(0)}78%{transform:translateY(-4%)}}
+@keyframes flotar{0%,100%{transform:translateY(0)}50%{transform:translateY(-7%)}}
+@keyframes pulsoC{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+body.anim-rebote .mascota svg, body.anim-rebote .m-grande svg,
+body.anim-rebote .mini-notch svg{animation:saltar 1.5s var(--ease) infinite}
+body.anim-flotar .mascota svg, body.anim-flotar .m-grande svg,
+body.anim-flotar .mini-notch svg{animation:flotar 3s ease-in-out infinite}
+body.anim-pulso .mascota svg, body.anim-pulso .m-grande svg,
+body.anim-pulso .mini-notch svg{animation:pulsoC 1.3s ease-in-out infinite}
+/* turbo / lento: velocidad de los indicadores de estado del notch */
+body.anim-turbo .s-waves i{animation-duration:.32s}
+body.anim-turbo .s-dots i{animation-duration:.38s}
+body.anim-turbo .s-dot i{animation-duration:1s}
+body.anim-lento .s-waves i{animation-duration:2.4s}
+body.anim-lento .s-dots i{animation-duration:1.9s}
+body.anim-lento .s-dot i{animation-duration:5.2s}
+
 /* ══════════════ EL PANEL ══════════════ */
 #panel{
   position:fixed;top:44px;left:50%;transform:translateX(-50%) translateY(-8px);
@@ -137,7 +178,7 @@ body.barra #notch:hover{box-shadow:0 6px 18px rgba(0,0,0,.55),
   background:
     radial-gradient(700px 420px at 88% 6%,rgba(11,61,145,.30),transparent 70%),
     radial-gradient(560px 380px at 6% 94%,rgba(252,61,33,.10),transparent 70%),
-    linear-gradient(180deg,#05070d 0%,#0a1120 100%);
+    linear-gradient(180deg,color-mix(in srgb,var(--panel) 55%,#000) 0%,var(--panel) 100%);
   box-shadow:0 24px 60px rgba(0,0,0,.7),inset 0 0 0 1px rgba(var(--acento-rgb),.14);
   display:flex;
 }
@@ -396,10 +437,21 @@ nav button .em{font-size:15px}
 .pie{font-size:9px;color:var(--sub);text-align:center;margin-top:8px}
 
 /* ══════════════ editor de look (mascota + notch + acento) ══════════ */
-.cosm{pointer-events:none}
+.cosm{pointer-events:none;filter:drop-shadow(0 1.5px 1.5px rgba(0,0,0,.35))}
+/* en la VISTA PREVIA los cosméticos se agarran: arrastrar = mover,
+   rueda = tamaño, doble clic = reset */
+.look-preview .cosm{pointer-events:visiblePainted;cursor:grab}
+.look-preview .cosm:active{cursor:grabbing}
+.sel-box{fill:rgba(var(--acento-rgb),.07);stroke:var(--acento);
+  stroke-width:1.2;stroke-dasharray:5 4;vector-effect:non-scaling-stroke;
+  pointer-events:none}
+.mini-notch{margin-top:10px;background:var(--notch);
+  border-radius:0 0 16px 16px;padding:5px 24px 3px;
+  display:flex;justify-content:center;
+  box-shadow:0 6px 18px rgba(0,0,0,.5),0 0 0 1px rgba(var(--acento-rgb),.15)}
 .look{display:flex;gap:14px}
-.look-preview{flex:0 0 172px;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:2px;padding:12px 6px;
+.look-preview{flex:0 0 308px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:2px;padding:12px 8px;
   background:radial-gradient(120px 90px at 50% 42%,
     rgba(var(--acento-rgb),.12),transparent 70%),var(--chip);
   border:1px solid var(--borde);border-radius:12px}
@@ -412,8 +464,11 @@ nav button .em{font-size:15px}
   border:1px solid var(--borde);border-radius:8px;background:var(--chip);
   cursor:pointer}
 .col-fila .hex{font:600 9px Consolas,monospace;color:var(--sub)}
-.cosm-slot{display:flex;align-items:center;gap:8px}
+.cosm-slot{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .cosm-slot > label{flex:0 0 60px;font-size:10.5px;font-weight:700;color:var(--sub)}
+.col-cosm{width:26px;height:22px;padding:1px;flex:0 0 auto;
+  border:1px solid var(--borde);border-radius:7px;background:var(--chip);
+  cursor:pointer}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip-cosm{padding:5px 10px;border-radius:9px;background:var(--chip);
   border:1px solid var(--borde);font-size:10.5px;font-weight:600;
@@ -423,6 +478,13 @@ nav button .em{font-size:15px}
   box-shadow:0 0 12px rgba(var(--acento-rgb),.25)}
 .look-acciones{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
   margin-top:2px}
+.look-acciones input{background:var(--chip);border:1px solid var(--borde);
+  border-radius:9px;padding:6px 10px;font-size:10.5px;color:var(--texto);
+  width:104px;outline:none}
+.look-acciones input:focus{border-color:var(--cielo);
+  box-shadow:0 0 0 2px rgba(var(--acento-rgb),.22)}
+.preset-usu .x{cursor:pointer;opacity:.55;margin-left:4px}
+.preset-usu .x:hover{opacity:1;color:var(--rojo)}
 
 /* ═══════════ modo DOS VENTANAS ═══════════
    ?v=notch  → solo la isla (la otra ventana pinta el panel)
@@ -598,13 +660,26 @@ body:not(.solo-panel) #panel{display:none}
               <h3 class="aj-h">Mascota y apariencia</h3>
               <p class="aj-sub">Dale look a NEXUS, señor: color de la
                 mascota y sus ojos, color del notch y del acento de los
-                brillos, más cosméticos para la cabeza, las gafas y el
-                cuello. Cambia algo y se ve YA en el notch de arriba;
-                se guarda solo.</p>
+                brillos, más cosméticos para la cabeza, las gafas, el
+                cuello y la mano — cada uno con su propio color, o con
+                un PNG que subas (🖼). Guarda tu look como preset y
+                vuelve a él con un clic. Cambia algo y se ve YA en el
+                notch de arriba; se guarda solo.</p>
               <div class="look">
                 <div class="look-preview">
                   <span class="m-grande" id="m-preview"></span>
-                  <div class="pie" style="margin-top:4px">vista previa en vivo</div>
+                  <div style="display:flex;gap:6px;margin-top:6px">
+                    <button class="chip-cosm" id="btn-reset-pos"
+                            title="Vuelve todo a su sitio (posición y giro)">↺ posición</button>
+                    <button class="chip-cosm" id="btn-reset-tam"
+                            title="Vuelve todos los tamaños a 100%">↺ tamaño</button>
+                  </div>
+                  <div class="mini-notch"><span id="m-notch-preview"></span></div>
+                  <div class="pie">así se ve en el notch</div>
+                  <div class="pie" id="look-ajuste-info" style="margin-top:4px">
+                    clic selecciona (recuadro) · arrastrar = mover ·
+                    rueda sobre lo seleccionado = tamaño · Mayús+rueda = girar ·
+                    doble clic = reset</div>
                 </div>
                 <div class="look-ctl">
                   <div class="col-fila"><label>Cuerpo</label>
@@ -626,21 +701,85 @@ body:not(.solo-panel) #panel{display:none}
                     <input type="color" id="col-acento" title="Brillos y bordes activos">
                     <span class="hex" id="hex-acento"></span>
                   </div>
+                  <div class="col-fila"><label>Panel</label>
+                    <input type="color" id="col-panel" title="Fondo del panel">
+                    <span class="hex" id="hex-panel"></span>
+                    <label style="flex:0 0 auto">tarjeta</label>
+                    <input type="color" id="col-card" title="Color de las tarjetas">
+                    <span class="hex" id="hex-card"></span>
+                  </div>
+                  <div class="col-fila"><label>Borde</label>
+                    <input type="color" id="col-borde" title="Bordes de tarjetas y campos">
+                    <span class="hex" id="hex-borde"></span>
+                    <label style="flex:0 0 auto">texto</label>
+                    <input type="color" id="col-texto" title="Color del texto">
+                    <span class="hex" id="hex-texto"></span>
+                  </div>
+                  <div class="cosm-slot"><label>Forma</label>
+                    <div class="chips" id="chips-forma"></div>
+                  </div>
+                  <div class="cosm-slot"><label>Animación</label>
+                    <div class="chips" id="chips-anim"></div>
+                  </div>
                   <div class="cosm-slot"><label>Cabeza</label>
                     <div class="chips" id="chips-sombrero"></div>
+                    <input type="color" class="col-cosm" id="colc-sombrero"
+                           title="Color del cosmético de cabeza">
+                    <button class="chip-cosm" id="png-sombrero"
+                            title="Subir PNG para la cabeza">🖼</button>
+                    <button class="chip-cosm" id="pngq-sombrero"
+                            title="Quitar el PNG" style="display:none">✕</button>
+                    <button class="chip-cosm" id="rotl-sombrero" title="Girar 15° ←">↺</button>
+                    <button class="chip-cosm" id="rotr-sombrero" title="Girar 15° →">↻</button>
+                    <input type="file" id="file-sombrero" accept="image/*"
+                           style="display:none">
                   </div>
                   <div class="cosm-slot"><label>Gafas</label>
                     <div class="chips" id="chips-gafas"></div>
+                    <input type="color" class="col-cosm" id="colc-gafas"
+                           title="Color del cosmético de gafas">
+                    <button class="chip-cosm" id="png-gafas"
+                            title="Subir PNG para las gafas">🖼</button>
+                    <button class="chip-cosm" id="pngq-gafas"
+                            title="Quitar el PNG" style="display:none">✕</button>
+                    <button class="chip-cosm" id="rotl-gafas" title="Girar 15° ←">↺</button>
+                    <button class="chip-cosm" id="rotr-gafas" title="Girar 15° →">↻</button>
+                    <input type="file" id="file-gafas" accept="image/*"
+                           style="display:none">
                   </div>
                   <div class="cosm-slot"><label>Cuello</label>
                     <div class="chips" id="chips-extra"></div>
+                    <input type="color" class="col-cosm" id="colc-extra"
+                           title="Color del cosmético del cuello">
+                    <button class="chip-cosm" id="png-extra"
+                            title="Subir PNG para el cuello">🖼</button>
+                    <button class="chip-cosm" id="pngq-extra"
+                            title="Quitar el PNG" style="display:none">✕</button>
+                    <button class="chip-cosm" id="rotl-extra" title="Girar 15° ←">↺</button>
+                    <button class="chip-cosm" id="rotr-extra" title="Girar 15° →">↻</button>
+                    <input type="file" id="file-extra" accept="image/*"
+                           style="display:none">
+                  </div>
+                  <div class="cosm-slot"><label>Mano</label>
+                    <div class="chips" id="chips-mano"></div>
+                    <button class="chip-cosm" id="png-mano"
+                            title="Subir PNG: la mano (guante) lo sostiene">🖼✋</button>
+                    <button class="chip-cosm" id="pngq-mano"
+                            title="Quitar el PNG" style="display:none">✕</button>
+                    <button class="chip-cosm" id="rotl-mano" title="Girar 15° ←">↺</button>
+                    <button class="chip-cosm" id="rotr-mano" title="Girar 15° →">↻</button>
+                    <input type="file" id="file-mano" accept="image/*"
+                           style="display:none">
+                    <span class="aj-nota">el PNG en «mano» sale sostenido
+                      por un guante</span>
                   </div>
                   <div class="look-acciones">
                     <span class="aj-nota">Presets:</span>
-                    <button class="chip-cosm preset" data-preset="clasico">Clásico</button>
-                    <button class="chip-cosm preset" data-preset="nasa">NASA</button>
-                    <button class="chip-cosm preset" data-preset="atardecer">Atardecer</button>
-                    <button class="chip-cosm preset" data-preset="bosque">Bosque</button>
+                    <div class="chips" id="chips-presets"></div>
+                    <input id="inp-preset-nombre" placeholder="Nombre…"
+                           maxlength="30" spellcheck="false">
+                    <button class="btn-aj" id="btn-guardar-preset"
+                            title="Guarda el look actual como preset">＋ Guardar actual</button>
                     <button class="btn-aj" id="btn-look-reset"
                             style="margin-left:auto">↺ Restablecer</button>
                   </div>
@@ -665,12 +804,30 @@ body:not(.solo-panel) #panel{display:none}
                   <span><b>En la barra de tareas</b><i>compacto, menú hacia arriba</i></span>
                 </button>
               </div>
+              <div class="aj-fila" style="margin-top:12px">
+                <label style="flex:0 0 96px">Posición fija</label>
+                <div class="chips" id="hpos-marcas" style="flex:1"></div>
+                <span class="aj-nota">las ventanas no se arrastran; elige
+                  izquierda, centro o derecha</span>
+              </div>
+              <div class="aj-fila" style="margin-top:12px">
+                <label style="flex:0 0 96px">Tamaño notch</label>
+                <input type="range" id="rng-notch" min="30" max="220"
+                       value="100" style="flex:1;min-width:0">
+                <span class="aj-nota" id="rng-notch-val"
+                      style="flex:0 0 44px;text-align:right">100%</span>
+              </div>
             </div>
 
             <div class="card" style="padding:16px 18px">
               <h3 class="aj-h">Pantalla</h3>
               <p class="aj-sub">¿En cuál monitor vive NEXUS?</p>
               <div class="opciones-pos" id="mon-marcas"></div>
+              <h3 class="aj-h" style="margin-top:14px">Tamaño del panel</h3>
+              <p class="aj-sub">Más ancho = más espacio para extenderte a los
+                lados. Se aplica al reiniciar NEXUS (cambiar el tamaño en
+                caliente rompería la transparencia).</p>
+              <div class="opciones-pos" id="tam-marcas"></div>
             </div>
 
             <div class="card" style="padding:16px 18px">
@@ -737,8 +894,21 @@ body:not(.solo-panel) #panel{display:none}
               </div>
             </div>
 
+            <div class="card" style="padding:16px 18px">
+              <h3 class="aj-h">Actualizaciones</h3>
+              <p class="aj-sub">Si corre como <b>nexus.exe</b>, se vigila solo:
+                si aparece un <b>nexus.exe</b> más nuevo en su carpeta, en
+                Descargas o en la nube (manifiesto), te avisa aquí y lo
+                instala solo como update.</p>
+              <div class="aj-fila">
+                <span class="aj-nota" id="upd-estado" style="flex:1">comprobando…</span>
+                <button class="btn-aj" id="btn-upd-buscar">🔍 Buscar ahora</button>
+                <button class="btn-aj" id="btn-upd-instalar" style="display:none">⬇ Instalar update</button>
+              </div>
+            </div>
+
             <div class="card" style="padding:14px 18px">
-              <h3 class="aj-h">Acerca de NEXUS</h3>
+              <h3 class="aj-h">Acerca de NEXUS <span class="chip" id="ver-app"></span></h3>
               <p class="aj-sub" style="margin:0">Todo corre 100% local en tu
                 PC. Di «oye Nexus» o usa Ctrl+Alt+Espacio para despertarme;
                 el engranaje del notch te trae aquí de un clic.</p>
@@ -752,11 +922,20 @@ body:not(.solo-panel) #panel{display:none}
 </div>
 
 <script>
-window.NEXUS_VER = 11;   // marcador de versión (debug de caché)
+window.NEXUS_VER = 19;   // marcador de versión (debug de caché)
 /* ═══════════ LOOK: mascota, notch y acento (pestaña Ajustes) ═══════ */
 const TEMA_DEF = {cuerpo:'#F8F4E8', cuerpo2:'#E1D8C1', ojos:'#141414',
   notch:'#05070d', acento:'#38bdf8',
-  cosmeticos:{sombrero:'ninguno', gafas:'ninguno', extra:'ninguno'}};
+  panel:'#0a1120', card:'#101a2e', borde:'#1e3a5f', texto:'#f8fafc',
+  anim:'clasico', forma:'original',
+  cosm_color:{sombrero:'', gafas:'', extra:'', mano:''},  // '' = seguir al acento
+  png:{sombrero:'', gafas:'', extra:'', mano:''},          // dataURL subido por slot
+  ajuste:{sombrero:{x:0,y:0,s:1,r:0}, gafas:{x:0,y:0,s:1,r:0},  // drag en la preview
+          extra:{x:0,y:0,s:1,r:0}, mano:{x:0,y:0,s:1,r:0}},      // x,y,s,r(otación)
+  cuerpo_t:{x:0,y:0,s:1},   // posición/tamaño del propio NEXUS («cuerpo» es el COLOR)
+  notch_s:1,                // escala de la pastilla del notch
+  cosmeticos:{sombrero:'ninguno', gafas:'ninguno', extra:'ninguno',
+              mano:'ninguno'}};
 let TEMA = JSON.parse(JSON.stringify(TEMA_DEF));
 let ultimaTema = '', lookEditado = 0, lookSaveTimer = null;
 
@@ -766,7 +945,8 @@ const COSM_OPTS = {
   gafas:    [['ninguno','Ninguna'],['sol','De sol'],['redondas','Redondas'],
              ['monoculo','Monóculo']],
   extra:    [['ninguno','Nada'],['mono','Moño'],['bigotes','Bigotes'],
-             ['corbata','Corbata']]};
+             ['corbata','Corbata']],
+  mano:     [['ninguno','Nada']]};
 
 const PRESETS = {
   clasico: JSON.parse(JSON.stringify(TEMA_DEF)),
@@ -780,79 +960,175 @@ const PRESETS = {
            notch:'#0c1206', acento:'#4ade80',
            cosmeticos:{sombrero:'orejas', gafas:'redondas', extra:'mono'}}};
 
-/* cosméticos dibujados sobre el viewBox 0 0 100 66 de la mascota */
+/* todas las claves de color del tema (cuerpo, UI del panel…) */
+const COLORES = ['cuerpo','cuerpo2','ojos','notch','acento',
+                 'panel','card','borde','texto'];
+/* formas del cuerpo (viewBox 0 0 100 66; ojos y boca valen para todas) */
+const FORMAS_OPTS = [['original','Original'],['redonda','Redonda'],
+                     ['pildora','Píldora'],['cuadrada','Cuadrada'],
+                     ['diamante','Diamante']];
+const FORMAS = {
+  original: 'M29 2 H71 Q80 2 84 11 L97 46 Q102 62 85 62 H15 Q-2 62 3 46 L16 11 Q20 2 29 2 Z',
+  redonda:  'M50 1.5 C75.5 1.5 98.5 15 98.5 33 C98.5 51 75.5 64.5 50 64.5 C24.5 64.5 1.5 51 1.5 33 C1.5 15 24.5 1.5 50 1.5 Z',
+  pildora:  'M22 2.5 H78 A30.5 30.5 0 0 1 78 63.5 H22 A30.5 30.5 0 0 1 22 2.5 Z',
+  cuadrada: 'M15 3.5 H85 Q96.5 3.5 96.5 15 V51 Q96.5 62.5 85 62.5 H15 Q3.5 62.5 3.5 51 V15 Q3.5 3.5 15 3.5 Z',
+  diamante: 'M50 1 L97.5 33 L50 65 L2.5 33 Z'};
+/* sets de animación + velocidad del parpadeo para cada uno */
+const ANIM_OPTS = [['clasico','Clásico'],['rebote','Rebote'],
+                   ['flotar','Flotar'],['pulso','Pulso'],
+                   ['turbo','Turbo'],['lento','Lento']];
+const ANIM_VEL = {clasico:1, rebote:1, flotar:1, pulso:1.4, turbo:2.4, lento:.45};
+
+/* cosméticos dibujados sobre el viewBox 0 0 100 66 de la mascota;
+   cada slot se tinta con su propio color: var(--cosm-<slot>) */
 const COSM = {
   sombrero: {
     gorra: `<g class="cosm">
-      <path d="M27 11 Q50 0 73 11 Q50 4 27 11 Z" fill="var(--acento)"/>
-      <path d="M70 9 Q88 7 93 13 Q79 17 67 13 Z"
-            fill="color-mix(in srgb, var(--acento) 55%, #000)"/>
-      <circle cx="50" cy="4.5" r="2.4" fill="var(--cuerpo2)"/></g>`,
+      <path d="M31 13 Q31 1.5 50 1.5 Q69 1.5 69 13 Q50 8.5 31 13 Z"
+            fill="var(--cosm-sombrero)"/>
+      <path d="M50 2 Q45 5.5 42.5 10.5 M50 2 Q55 5.5 57.5 10.5"
+            stroke="color-mix(in srgb, var(--cosm-sombrero) 60%, #000)"
+            stroke-width="1" fill="none"/>
+      <ellipse cx="50" cy="13" rx="23" ry="5.2"
+               fill="color-mix(in srgb, var(--cosm-sombrero) 55%, #000)"/>
+      <circle cx="50" cy="2.6" r="2.1"
+              fill="color-mix(in srgb, var(--cosm-sombrero) 70%, #fff)"/></g>`,
     corona: `<g class="cosm">
-      <path d="M33 11 L36 0 L44 7 L50 0 L56 7 L64 0 L67 11 Q50 5 33 11 Z"
-            fill="#F5A623" stroke="#b45309" stroke-width="1"/>
-      <circle cx="42" cy="7.5" r="1.6" fill="var(--acento)"/>
-      <circle cx="50" cy="5.5" r="1.6" fill="var(--acento)"/>
-      <circle cx="58" cy="7.5" r="1.6" fill="var(--acento)"/></g>`,
+      <path d="M33 12 L35.5 1.5 L43 8 L50 0.5 L57 8 L64.5 1.5 L67 12 Z"
+            fill="var(--cosm-sombrero)" stroke-linejoin="round"
+            stroke="color-mix(in srgb, var(--cosm-sombrero) 55%, #000)"
+            stroke-width="1.2"/>
+      <rect x="32" y="11" width="36" height="5" rx="2.2"
+            fill="color-mix(in srgb, var(--cosm-sombrero) 70%, #000)"/>
+      <circle cx="41" cy="13.5" r="1.7" fill="#fff" opacity=".92"/>
+      <circle cx="50" cy="13.5" r="1.7" fill="#fff" opacity=".92"/>
+      <circle cx="59" cy="13.5" r="1.7" fill="#fff" opacity=".92"/></g>`,
     copa: `<g class="cosm">
-      <rect x="38" y="0" width="24" height="9.5" rx="2" fill="var(--ojos-c)"/>
-      <rect x="38" y="6" width="24" height="3.2" fill="var(--acento)"/>
-      <ellipse cx="50" cy="9.4" rx="24" ry="4.6" fill="var(--ojos-c)"/></g>`,
+      <rect x="39" y="0" width="22" height="11.5" rx="2" fill="var(--cosm-sombrero)"/>
+      <rect x="39" y="7.5" width="22" height="3.6"
+            fill="color-mix(in srgb, var(--cosm-sombrero) 55%, #000)"/>
+      <ellipse cx="50" cy="11.8" rx="24.5" ry="4.8" fill="var(--cosm-sombrero)"
+               stroke="color-mix(in srgb, var(--cosm-sombrero) 55%, #000)"
+               stroke-width="1"/></g>`,
     orejas: `<g class="cosm">
-      <path d="M30 14 L34 0 L46 9 Z" fill="var(--cuerpo2)"
-            stroke="var(--ojos-c)" stroke-width="1.2" stroke-linejoin="round"/>
-      <path d="M70 14 L66 0 L54 9 Z" fill="var(--cuerpo2)"
-            stroke="var(--ojos-c)" stroke-width="1.2" stroke-linejoin="round"/>
-      <path d="M33.5 11 L35.5 4.5 L41 8.5 Z" fill="var(--acento)" opacity=".85"/>
-      <path d="M66.5 11 L64.5 4.5 L59 8.5 Z" fill="var(--acento)" opacity=".85"/></g>`
+      <path d="M29 15 Q30 6 34 0 Q42 4 46 10 Q38 12.5 29 15 Z"
+            fill="var(--cosm-sombrero)" stroke-linejoin="round"
+            stroke="color-mix(in srgb, var(--cosm-sombrero) 55%, #000)"
+            stroke-width="1.1"/>
+      <path d="M71 15 Q70 6 66 0 Q58 4 54 10 Q62 12.5 71 15 Z"
+            fill="var(--cosm-sombrero)" stroke-linejoin="round"
+            stroke="color-mix(in srgb, var(--cosm-sombrero) 55%, #000)"
+            stroke-width="1.1"/>
+      <path d="M33.5 11 Q34.5 6 36.5 2.5 Q40 5.5 42 8.5 Q38 10.5 33.5 11 Z"
+            fill="#ffb3c6"/>
+      <path d="M66.5 11 Q65.5 6 63.5 2.5 Q60 5.5 58 8.5 Q62 10.5 66.5 11 Z"
+            fill="#ffb3c6"/></g>`
   },
   gafas: {
     sol: `<g class="cosm">
-      <rect x="30.5" y="25" width="15" height="14" rx="6.5" fill="#0b0b10" opacity=".95"/>
-      <rect x="54.5" y="25" width="15" height="14" rx="6.5" fill="#0b0b10" opacity=".95"/>
-      <path d="M45.5 30 Q50 27.5 54.5 30" stroke="#0b0b10" stroke-width="2.4" fill="none"/>
-      <path d="M30.5 29 L21 26.5 M69.5 29 L79 26.5" stroke="#0b0b10"
-            stroke-width="2" stroke-linecap="round"/>
-      <path d="M34 28 L38.5 33" stroke="rgba(255,255,255,.4)"
-            stroke-width="1.6" stroke-linecap="round"/></g>`,
+      <rect x="30" y="24.5" width="15.5" height="14.5" rx="7"
+            fill="rgba(8,10,18,.93)" stroke="var(--cosm-gafas)" stroke-width="2.2"/>
+      <rect x="54.5" y="24.5" width="15.5" height="14.5" rx="7"
+            fill="rgba(8,10,18,.93)" stroke="var(--cosm-gafas)" stroke-width="2.2"/>
+      <path d="M45.5 29.5 Q50 27 54.5 29.5" stroke="var(--cosm-gafas)"
+            stroke-width="2.6" fill="none" stroke-linecap="round"/>
+      <path d="M30 28.5 L20.5 25.5 M70 28.5 L79.5 25.5" stroke="var(--cosm-gafas)"
+            stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M33.5 27.5 L38 33" stroke="rgba(255,255,255,.5)"
+            stroke-width="1.8" stroke-linecap="round"/></g>`,
     redondas: `<g class="cosm">
-      <circle cx="37.9" cy="33.2" r="8.8" fill="rgba(255,255,255,.07)"
-              stroke="var(--ojos-c)" stroke-width="2.2"/>
-      <circle cx="62.1" cy="33.2" r="8.8" fill="rgba(255,255,255,.07)"
-              stroke="var(--ojos-c)" stroke-width="2.2"/>
-      <path d="M46.7 32.5 Q50 30 53.3 32.5" stroke="var(--ojos-c)"
-            stroke-width="2.2" fill="none"/>
-      <path d="M29.1 32 L20.5 29 M70.9 32 L79.5 29" stroke="var(--ojos-c)"
-            stroke-width="2" stroke-linecap="round"/></g>`,
+      <circle cx="37.9" cy="33" r="9" fill="rgba(255,255,255,.08)"
+              stroke="var(--cosm-gafas)" stroke-width="2.4"/>
+      <circle cx="62.1" cy="33" r="9" fill="rgba(255,255,255,.08)"
+              stroke="var(--cosm-gafas)" stroke-width="2.4"/>
+      <path d="M46.9 32 Q50 29.5 53.1 32" stroke="var(--cosm-gafas)"
+            stroke-width="2.4" fill="none"/>
+      <path d="M28.9 31.5 L20 28.5 M71.1 31.5 L80 28.5" stroke="var(--cosm-gafas)"
+            stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M34 29.5 L37 32.5 M58.5 29.5 L61.5 32.5"
+            stroke="rgba(255,255,255,.35)" stroke-width="1.4"
+            stroke-linecap="round"/></g>`,
     monoculo: `<g class="cosm">
-      <circle cx="62.1" cy="33.2" r="9" fill="rgba(255,255,255,.08)"
-              stroke="#d4af37" stroke-width="2.2"/>
-      <circle cx="62.1" cy="33.2" r="5.8" fill="none"
-              stroke="#d4af37" stroke-width="1" opacity=".7"/>
-      <path d="M67.8 39.5 Q74 48 64 57" stroke="#d4af37" stroke-width="1.6"
-            fill="none"/></g>`
+      <circle cx="62.1" cy="33" r="9.2" fill="rgba(255,255,255,.1)"
+              stroke="var(--cosm-gafas)" stroke-width="2.4"/>
+      <circle cx="62.1" cy="33" r="5.6" fill="none" stroke="var(--cosm-gafas)"
+              stroke-width="1" opacity=".65"/>
+      <path d="M67.9 39.8 Q74.5 48 64.5 57.5" stroke="var(--cosm-gafas)"
+            stroke-width="1.7" fill="none"/>
+      <circle cx="64.5" cy="57.5" r="1.4" fill="var(--cosm-gafas)"/></g>`
   },
   extra: {
     mono: `<g class="cosm">
-      <path d="M50 55 L37.5 48.5 L37.5 61.5 Z" fill="var(--acento)"/>
-      <path d="M50 55 L62.5 48.5 L62.5 61.5 Z" fill="var(--acento)"/>
-      <circle cx="50" cy="55" r="3.4"
-              fill="color-mix(in srgb, var(--acento) 55%, #000)"/></g>`,
+      <path d="M50 54 Q44 47.5 37 47 Q37 61 44 60.5 Q48 60 50 54 Z"
+            fill="var(--cosm-extra)"/>
+      <path d="M50 54 Q56 47.5 63 47 Q63 61 56 60.5 Q52 60 50 54 Z"
+            fill="var(--cosm-extra)"/>
+      <circle cx="50" cy="54" r="3.8"
+              fill="color-mix(in srgb, var(--cosm-extra) 60%, #000)"/></g>`,
     bigotes: `<g class="cosm">
-      <path d="M50 49 Q41 45 31.5 48 M50 49 Q59 45 68.5 48
-               M50 53.5 Q42 57.5 33.5 54.5 M50 53.5 Q58 57.5 66.5 54.5"
-            stroke="var(--ojos-c)" stroke-width="1.8" fill="none"
+      <path d="M50 48.5 Q41 44.5 31 47.5 M50 48.5 Q59 44.5 69 47.5
+               M50 53 Q42 57.5 33.5 54.5 M50 53 Q58 57.5 66.5 54.5"
+            stroke="var(--cosm-extra)" stroke-width="2.1" fill="none"
             stroke-linecap="round"/></g>`,
     corbata: `<g class="cosm">
-      <path d="M50 63 L44.5 51.5 L50 47.5 L55.5 51.5 Z" fill="var(--acento)"/>
-      <path d="M45.5 48.5 H54.5 L50 52.5 Z"
-            fill="color-mix(in srgb, var(--acento) 55%, #000)"/></g>`
-  }
+      <path d="M45.5 48 H54.5 L50 53 Z"
+            fill="color-mix(in srgb, var(--cosm-extra) 60%, #000)"/>
+      <path d="M50 63 L45 53.5 L50 51 L55 53.5 Z" fill="var(--cosm-extra)"/></g>`
+  },
+  mano: {}   /* la mano solo existe con PNG subido (ver pngSVG) */
 };
 
-function cosmSVG(slot) {
-  const k = (TEMA.cosmeticos || {})[slot] || 'ninguno';
-  return (COSM[slot] && COSM[slot][k]) || '';
+/* dónde cae cada PNG subido (viewBox 0 0 100 66) */
+const PNG_POS = {
+  sombrero: 'x="23" y="0" width="54" height="24"',
+  gafas:    'x="25" y="22.5" width="50" height="23"',
+  extra:    'x="37" y="43" width="26" height="19"',
+  mano:     'x="82" y="11" width="22" height="22"'};
+
+function pngSVG(slot, g) {
+  const d = (TEMA.png || {})[slot] || '';
+  if (!d) return '';
+  const pos = PNG_POS[slot] || PNG_POS.extra;
+  if (slot === 'mano') {
+    /* brazo tipo countryball saliendo del flanco + guante con el MISMO
+       degradado del cuerpo (url(#g) = el gradiente de esta instancia) */
+    return `<g class="cosm"><image href="${d}" ${pos} preserveAspectRatio="xMidYMid meet"/>
+      <path d="M86 45 L93 41" stroke="var(--ojos-c)" stroke-width="1.8"
+            stroke-linecap="round" fill="none"/>
+      <g stroke="var(--ojos-c)" fill="url(#${g})">
+        <ellipse cx="93" cy="39" rx="6.5" ry="7.5" stroke-width="1.3"/>
+        <ellipse cx="87" cy="36.5" rx="2.8" ry="4.2"
+                 transform="rotate(-25 87 36.5)" stroke-width="1.2"/>
+        <rect x="89.5" y="30" width="4.6" height="7.5" rx="2.3" stroke-width="1.1"/>
+        <rect x="95" y="30" width="4.6" height="7.5" rx="2.3" stroke-width="1.1"/>
+      </g></g>`;
+  }
+  return `<g class="cosm"><image href="${d}" ${pos} preserveAspectRatio="xMidYMid meet"/></g>`;
+}
+
+/* ancla de cada slot en el viewBox 100×66: el arrastre mueve el cosmético
+   respecto a ese punto y la rueda lo escala alrededor de él */
+const COSM_ANCHOR = {sombrero:{x:50,y:8}, gafas:{x:50,y:33},
+                     extra:{x:50,y:54}, mano:{x:92,y:28}};
+
+function cosmT(slot) {
+  const a = (TEMA.ajuste || {})[slot] || {x:0, y:0, s:1, r:0};
+  const A = COSM_ANCHOR[slot] || {x:50, y:33};
+  return 'translate(' + (A.x + a.x).toFixed(1) + ' ' + (A.y + a.y).toFixed(1) +
+         ') rotate(' + (+(a.r || 0)).toFixed(1) +
+         ') scale(' + (+a.s).toFixed(3) + ') translate(' + (-A.x) + ' ' + (-A.y) + ')';
+}
+
+function cosmSVG(slot, g) {
+  let s = '';
+  if ((TEMA.png || {})[slot]) s = pngSVG(slot, g);   // si hay PNG, manda
+  else {
+    const k = (TEMA.cosmeticos || {})[slot] || 'ninguno';
+    s = (COSM[slot] && COSM[slot][k]) || '';
+  }
+  if (!s) return '';
+  return s.replace('<g class="cosm">',
+    '<g class="cosm" data-slot="' + slot + '" transform="' + cosmT(slot) + '">');
 }
 
 function hexRgb(h) {
@@ -862,46 +1138,160 @@ function hexRgb(h) {
 function mezclarTema(t) {
   const m = JSON.parse(JSON.stringify(TEMA_DEF));
   if (!t || typeof t !== 'object') return m;
-  ['cuerpo','cuerpo2','ojos','notch','acento'].forEach(k => {
+  COLORES.forEach(k => {
     if (/^#[0-9a-fA-F]{6}$/.test(t[k] || '')) m[k] = t[k].toLowerCase();
   });
+  if (ANIM_OPTS.some(o => o[0] === t.anim)) m.anim = t.anim;
+  if (FORMAS_OPTS.some(o => o[0] === t.forma)) m.forma = t.forma;
   if (t.cosmeticos && typeof t.cosmeticos === 'object')
     Object.keys(m.cosmeticos).forEach(k => {
       if ((COSM_OPTS[k] || []).some(o => o[0] === t.cosmeticos[k]))
         m.cosmeticos[k] = t.cosmeticos[k];
     });
+  const cc = (t.cosm_color && typeof t.cosm_color === 'object') ? t.cosm_color : {};
+  Object.keys(m.cosm_color).forEach(k => {
+    if (/^#[0-9a-fA-F]{6}$/.test(cc[k] || '')) m.cosm_color[k] = cc[k].toLowerCase();
+  });
+  const pg = (t.png && typeof t.png === 'object') ? t.png : {};
+  Object.keys(m.png).forEach(k => {
+    if (typeof pg[k] === 'string' && pg[k].length <= 220000
+        && /^data:image\/(png|webp);base64,[A-Za-z0-9+/=]+$/.test(pg[k]))
+      m.png[k] = pg[k];
+  });
+  const aj = (t.ajuste && typeof t.ajuste === 'object') ? t.ajuste : {};
+  const num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
+  Object.keys(m.ajuste).forEach(k => {
+    const a = (aj[k] && typeof aj[k] === 'object') ? aj[k] : {};
+    m.ajuste[k] = {x: Math.max(-400, Math.min(400, num(a.x))),   // sin límites
+                   y: Math.max(-400, Math.min(400, num(a.y))),
+                   s: Math.max(0.05, Math.min(10, num(a.s) || 1)),
+                   r: Math.max(-180, Math.min(180, num(a.r)))};
+  });
+  // migración: temas viejos guardaban la posición en «cuerpo» (dict)
+  let cb = (t.cuerpo_t && typeof t.cuerpo_t === 'object') ? t.cuerpo_t
+         : (t.cuerpo && typeof t.cuerpo === 'object') ? t.cuerpo : {};
+  m.cuerpo_t = {x: Math.max(-400, Math.min(400, num(cb.x))),
+                y: Math.max(-400, Math.min(400, num(cb.y))),
+                s: Math.max(0.1, Math.min(10, num(cb.s) || 1))};   // sin límites
+  m.notch_s = Math.max(0.3, Math.min(2.2, num(t.notch_s) || 1));
   return m;
+}
+/* posición fija horizontal de las ventanas (hpos) */
+let hposActual = 'centro';
+function aplicarNotchLayout() {
+  const nt = document.getElementById('notch');
+  if (!nt) return;
+  const s = TEMA.notch_s || 1;
+  nt.style.transform = hposActual === 'centro'
+    ? 'translateX(-50%) scale(' + s + ')'
+    : 'scale(' + s + ')';   // hizq/hder: el CSS pone left/right fijo
+}
+function aplicarHpos(h) {
+  hposActual = ['izquierda','centro','derecha'].includes(h) ? h : 'centro';
+  document.body.classList.toggle('hizq', hposActual === 'izquierda');
+  document.body.classList.toggle('hder', hposActual === 'derecha');
+  aplicarNotchLayout();
 }
 function aplicarTema(t) {
   TEMA = mezclarTema(t);
   const r = document.documentElement.style;
-  r.setProperty('--cuerpo', TEMA.cuerpo);
-  r.setProperty('--cuerpo2', TEMA.cuerpo2);
-  r.setProperty('--ojos-c', TEMA.ojos);
-  r.setProperty('--notch', TEMA.notch);
-  r.setProperty('--acento', TEMA.acento);
+  COLORES.forEach(k => {
+    if (k === 'ojos') r.setProperty('--ojos-c', TEMA.ojos);
+    else r.setProperty('--' + k, TEMA[k]);
+  });
   r.setProperty('--cielo', TEMA.acento);   // el acento manda en los brillos
   r.setProperty('--acento-rgb', hexRgb(TEMA.acento));
+  ['sombrero','gafas','extra'].forEach(k =>   // color propio del cosmético
+    r.setProperty('--cosm-' + k, TEMA.cosm_color[k] || TEMA.acento));
+  /* set de animación en el body */
+  document.body.classList.remove('anim-rebote','anim-flotar','anim-pulso',
+                                 'anim-turbo','anim-lento');
+  if (TEMA.anim && TEMA.anim !== 'clasico')
+    document.body.classList.add('anim-' + TEMA.anim);
+  aplicarNotchLayout();          // tamaño de la pastilla (según hpos)
   pintarMascotas();
+  pintarSel();
+}
+
+/* transform del cuerpo: NEXUS se mueve/escala alrededor de su centro
+   (50,33); con el default es identidad */
+function cuerpoT() {
+  const c = TEMA.cuerpo_t || {x:0, y:0, s:1};
+  return 'translate(' + (50 + c.x).toFixed(1) + ' ' + (33 + c.y).toFixed(1) +
+         ') scale(' + (+c.s).toFixed(3) + ') translate(-50 -33)';
+}
+
+/* selección: un objeto solo se mueve si se le hace clic encima; el
+   recuadro punteado marca qué está seleccionado */
+const SEL_EXT = {sombrero:[58,24], gafas:[54,24], extra:[34,22], mano:[42,46]};
+let sel = null;   // {slot:'…'} | {body:true} | null
+
+/* viewBox de la preview con AUTO-AJUSTE: muestra TODO el contenido
+   (cuerpo + cosméticos activos) con margen, sin importar los límites */
+function previewVB(minW, minH) {
+  const c = TEMA.cuerpo_t || {x:0, y:0, s:1}, s = c.s || 1;
+  let x0 = 50 + c.x - 50*s, x1 = 50 + c.x + 50*s;
+  let y0 = 33 + c.y - 33*s, y1 = 33 + c.y + 33*s;
+  Object.keys(COSM_OPTS).forEach(slot => {
+    if (!(TEMA.png[slot] || TEMA.cosmeticos[slot] !== 'ninguno')) return;
+    const a = TEMA.ajuste[slot], A = COSM_ANCHOR[slot], e = SEL_EXT[slot] || [30,20];
+    const w = e[0]*a.s*s/2, h = e[1]*a.s*s/2;
+    const cx = 50 + c.x + s*(A.x + a.x - 50), cy = 33 + c.y + s*(A.y + a.y - 33);
+    x0 = Math.min(x0, cx - w); x1 = Math.max(x1, cx + w);
+    y0 = Math.min(y0, cy - h); y1 = Math.max(y1, cy + h);
+  });
+  const pad = 14;
+  x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  const w = Math.max(x1 - x0, minW || 130), h = Math.max(y1 - y0, minH || 86);
+  return (cx - w/2).toFixed(1) + ' ' + (cy - h/2).toFixed(1) + ' ' +
+         w.toFixed(1) + ' ' + h.toFixed(1);
+}
+function pintarSel() {
+  const prev = document.getElementById('m-preview');
+  const svg = prev && prev.querySelector('svg');
+  if (!svg) return;
+  svg.querySelectorAll('.sel-box').forEach(e => e.remove());
+  if (!sel) return;
+  let x, y, w, h, tf;
+  if (sel.body) { x = 0; y = 0; w = 100; h = 66; tf = cuerpoT(); }
+  else {
+    const A = COSM_ANCHOR[sel.slot], e = SEL_EXT[sel.slot] || [30, 20];
+    w = e[0]; h = e[1]; x = A.x - w/2; y = A.y - h/2;
+    tf = cuerpoT() + ' ' + cosmT(sel.slot);
+  }
+  const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  r.setAttribute('x', x.toFixed(1)); r.setAttribute('y', y.toFixed(1));
+  r.setAttribute('width', w); r.setAttribute('height', h);
+  r.setAttribute('rx', 6);
+  r.setAttribute('class', 'sel-box');
+  r.setAttribute('transform', tf);
+  svg.appendChild(r);
+}
+function fitPreviewLive() {
+  const p = document.getElementById('m-preview');
+  const svg = p && p.querySelector('svg');
+  if (svg) svg.setAttribute('viewBox', previewVB());
 }
 
 /* ═══════════ la mascota: cuerpo Troko + OJOS PÍLDORA expresivos ═══ */
-function mascota(w, h, id) {
+function mascota(w, h, id, vb) {
   /* id ÚNICO por instancia: si dos SVG repiten el id del gradiente,
      el de arriba (oculto) se queda con la referencia y Chromium
-     pinta el cuerpo NEGRO en vez del degradado crema */
+     pinta el cuerpo NEGRO en vez del degradado crema.
+     vb: la preview usa un viewBox amplio (margen a los lados) para poder
+     poner cosméticos FUERA del cuerpo; notch/lado llevan un margen chico */
   const g = "grad" + id;
-  return `<svg width="${w}" height="${h}" viewBox="0 0 100 66">
+  return `<svg width="${w}" height="${h}" viewBox="${vb || '0 0 100 66'}">
   <defs>
     <linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" style="stop-color:var(--cuerpo)"/>
       <stop offset="1" style="stop-color:var(--cuerpo2)"/>
     </linearGradient>
   </defs>
-  <g class="cuerpo-g" transform="translate(0,0)">
-    <path class="cuerpo" fill="url(#${g})" d="M29 2 H71 Q80 2 84 11 L97 46 Q102 62 85 62
-             H15 Q-2 62 3 46 L16 11 Q20 2 29 2 Z"/>
-    ${cosmSVG('sombrero')}
+  <g class="cuerpo-g" transform="${cuerpoT()}">
+    <path class="cuerpo" fill="url(#${g})" d="${FORMAS[TEMA.forma] || FORMAS.original}"/>
+    ${cosmSVG('sombrero', g)}
     <g class="ojos">
       <g class="ojo i">
         <rect x="33.4" y="26.5" width="9.2" height="13.5" rx="4.6"
@@ -914,19 +1304,24 @@ function mascota(w, h, id) {
         <circle cx="60.2" cy="29.6" r="1.5" style="fill:var(--cuerpo)"/>
       </g>
     </g>
-    ${cosmSVG('gafas')}
+    ${cosmSVG('gafas', g)}
     <path class="sonrisa" d="M43 46 Q50 51.5 57 46" fill="none"
           style="stroke:var(--ojos-c)" stroke-width="2.4" stroke-linecap="round"/>
-    ${cosmSVG('extra')}
+    ${cosmSVG('extra', g)}
+    ${cosmSVG('mano', g)}
   </g></svg>`;
 }
 function pintarMascotas() {
   const n = document.getElementById('m-notch');
   const l = document.getElementById('m-lado');
   const p = document.getElementById('m-preview');
-  if (n) n.innerHTML = mascota(46, 31, 'Notch');
-  if (l) l.innerHTML = mascota(74, 49, 'Lado');
-  if (p) p.innerHTML = mascota(150, 99, 'Preview');
+  const np = document.getElementById('m-notch-preview');
+  /* auto-fit en TODAS las instancias: NEXUS nunca se corta, ni en el
+     notch ni en el lateral, por grande/corrido que esté */
+  if (n) n.innerHTML = mascota(46, 31, 'Notch', previewVB(112, 74));
+  if (l) l.innerHTML = mascota(74, 49, 'Lado', previewVB(120, 80));
+  if (p) p.innerHTML = mascota(292, 192, 'Preview', previewVB(130, 86));
+  if (np) np.innerHTML = mascota(46, 31, 'PrevNotch', previewVB(112, 74));
 }
 pintarMascotas();
 
@@ -977,6 +1372,8 @@ function aplicarEstado(e) {
      barra) y, en la ventana del panel, marcar la opción y saltar a
      Ajustes cuando lo pide el engranaje */
   document.body.classList.toggle('barra', esBarra(e.pos));
+  if (e.hpos) aplicarHpos(e.hpos);       // izquierda/centro/derecha fija
+  if (e.tam) aplicarTam(e.tam);          // tamaño del panel (CSS = ventana)
   if (MODO === 'panel') {
     if (e.pos) marcarPos(e.pos);
     if (e.ir_a && e.ir_a !== ultimoIrA) { ultimoIrA = e.ir_a;
@@ -996,6 +1393,7 @@ function aplicarEstado(e) {
       }
     }
   }
+  if (e.update && MODO === 'panel') pintarUpdate(e.update, e.version);
 }
 
 /* ═══════════ mirada y parpadeo ═══════════ */
@@ -1023,8 +1421,9 @@ setInterval(() => {           // nadie mueve el mouse: mira pa' los lados
   }
   requestAnimationFrame(mirar);
 })();
-(function parpadear() {       // 110 ms cada 2.8–6 s
-  const t = 2800 + Math.random() * 3200;
+(function parpadear() {       // 110 ms cada 2.8–6 s (÷ velocidad del set)
+  const vel = ANIM_VEL[TEMA.anim] || 1;
+  const t = (2800 + Math.random() * 3200) / vel;
   setTimeout(() => {
     document.querySelectorAll('.mascota, .m-grande').forEach(m =>
       m.classList.add('parpadeo'));
@@ -1101,6 +1500,42 @@ function pintarMonitores(a) {
     cont.appendChild(b);
   });
 }
+/* tamaño del panel: ancho × alto de la ventana (CSS = alto − 24) */
+const TAM_CSS = {compacto:[800,476], grande:[1080,576], ancho:[1320,616]};
+const TAM_NOM = {compacto:'Compacto 800×500', grande:'Grande 1080×600',
+                 ancho:'Ancho 1320×640'};
+let tamActual = 'grande';
+function aplicarTam(tam) {
+  tamActual = TAM_CSS[tam] ? tam : 'grande';
+  const p = document.getElementById('panel');
+  if (p) {
+    p.style.width = TAM_CSS[tamActual][0] + 'px';
+    p.style.height = TAM_CSS[tamActual][1] + 'px';
+  }
+  marcarTam(tamActual);
+}
+function marcarTam(tam) {
+  tamActual = tam;
+  document.querySelectorAll('#tam-marcas .op').forEach(b =>
+    b.classList.toggle('act', b.dataset.tam === tam));
+}
+function construirTams() {
+  const cont = document.getElementById('tam-marcas');
+  if (!cont) return;
+  cont.innerHTML = '';
+  Object.keys(TAM_CSS).forEach(k => {
+    const b = document.createElement('button');
+    b.className = 'op mini';
+    b.dataset.tam = k;
+    b.innerHTML = '<span class="op-ico">🖥</span><span><b>' +
+      (TAM_NOM[k] || k) + '</b><i>se aplica al reiniciar</i></span>';
+    b.addEventListener('click', () => {
+      pywebview.api.fijar_tam(k).then(() => marcarTam(k));
+    });
+    cont.appendChild(b);
+  });
+  marcarTam(tamActual);
+}
 const esc = s => (s || '').replace(/</g, '&lt;');
 function pintarVoces(a) {
   const cont = document.getElementById('lista-voces');
@@ -1129,18 +1564,30 @@ function pintarVoces(a) {
 function refrescarVoces() {
   pywebview.api.ajustes().then(pintarVoces).catch(() => {});
 }
-/* ── editor de look (mascota + notch + acento) ────────────────── */
+/* ── editor de look (mascota + notch + acento + PNGs + presets) ── */
 function sincronizarControlesLook() {
-  ['cuerpo','cuerpo2','ojos','notch','acento'].forEach(k => {
+  COLORES.forEach(k => {
     const inp = document.getElementById('col-' + k);
     if (inp) inp.value = TEMA[k];
     const hex = document.getElementById('hex-' + k);
     if (hex) hex.textContent = TEMA[k];
   });
+  document.querySelectorAll('#chips-forma .chip-cosm').forEach(c =>
+    c.classList.toggle('act', c.dataset.forma === TEMA.forma));
+  document.querySelectorAll('#chips-anim .chip-cosm').forEach(c =>
+    c.classList.toggle('act', c.dataset.anim === TEMA.anim));
   Object.keys(COSM_OPTS).forEach(slot => {
     document.querySelectorAll('#chips-' + slot + ' .chip-cosm').forEach(c =>
       c.classList.toggle('act', c.dataset.cosm === TEMA.cosmeticos[slot]));
+    const col = document.getElementById('colc-' + slot);
+    if (col) col.value = TEMA.cosm_color[slot] || TEMA.acento;
+    const q = document.getElementById('pngq-' + slot);
+    if (q) q.style.display = TEMA.png[slot] ? '' : 'none';
   });
+  const rng = document.getElementById('rng-notch');   // tamaño del notch
+  if (rng) rng.value = Math.round((TEMA.notch_s || 1) * 100);
+  const rv = document.getElementById('rng-notch-val');
+  if (rv) rv.textContent = Math.round((TEMA.notch_s || 1) * 100) + '%';
 }
 function guardarLook() {
   lookEditado = Date.now();
@@ -1150,7 +1597,243 @@ function guardarLook() {
     catch (_) {}
   }, 350);
 }
+/* sube un PNG como cosmético del slot: se reescala a máx. 128 px y se
+   guarda como dataURL (así cabe en nexus_ajustes.json y lo pinta el SVG) */
+function procesarPng(slot, file) {
+  if (!file) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 128;
+      const esc = Math.min(1, MAX / Math.max(img.width, img.height, 1));
+      const w = Math.max(1, Math.round(img.width * esc));
+      const h = Math.max(1, Math.round(img.height * esc));
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      TEMA.png[slot] = cv.toDataURL('image/png');
+      aplicarTema(TEMA);
+      sincronizarControlesLook();
+      guardarLook();
+    };
+    img.src = rd.result;
+  };
+  rd.readAsDataURL(file);
+}
+/* presets: los de fábrica + los del usuario (guardados en Python) */
+const PRESET_NOM = {clasico:'Clásico', nasa:'NASA', atardecer:'Atardecer',
+                    bosque:'Bosque'};
+let PRESETS_USU = [];
+function pintarPresets() {
+  const cont = document.getElementById('chips-presets');
+  if (!cont) return;
+  cont.innerHTML = '';
+  Object.keys(PRESETS).forEach(k => {
+    const b = document.createElement('button');
+    b.className = 'chip-cosm preset';
+    b.dataset.preset = k;
+    b.textContent = PRESET_NOM[k] || k;
+    b.addEventListener('click', () => {
+      aplicarTema(PRESETS[k]);
+      sincronizarControlesLook();
+      guardarLook();
+    });
+    cont.appendChild(b);
+  });
+  PRESETS_USU.forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'chip-cosm preset-usu';
+    b.title = 'Aplicar «' + p.nombre + '»';
+    b.textContent = '★ ' + p.nombre;
+    b.addEventListener('click', () => {
+      aplicarTema(p.tema);
+      sincronizarControlesLook();
+      guardarLook();
+    });
+    const x = document.createElement('span');
+    x.className = 'x'; x.textContent = '✕'; x.title = 'Eliminar preset';
+    x.addEventListener('click', ev => {
+      ev.stopPropagation();
+      pywebview.api.borrar_preset(p.nombre).then(pintarPresetsUsu);
+    });
+    b.appendChild(x);
+    cont.appendChild(b);
+  });
+}
+function pintarPresetsUsu(lista) {
+  PRESETS_USU = Array.isArray(lista) ? lista : [];
+  pintarPresets();
+}
+/* ── ajuste fino en la vista previa: arrastrar mueve, rueda escala,
+   doble clic resetea el slot (se guarda con el resto del look) ── */
+function svgPunto(cont, ev) {
+  const svg = cont.querySelector('svg');
+  const r = svg.getBoundingClientRect();
+  const vb = (svg.getAttribute('viewBox') || '0 0 100 66').split(/\s+/).map(Number);
+  return {x: vb[0] + (ev.clientX - r.left) / r.width * vb[2],
+          y: vb[1] + (ev.clientY - r.top) / r.height * vb[3]};
+}
+const SLOT_NOM = {sombrero:'cabeza', gafas:'gafas', extra:'cuello', mano:'mano'};
+const HINT = ' (arrastra = mover · rueda = tamaño · Mayús+rueda/↺↻ = girar · doble clic = reset)';
+function infoAjuste(slot) {
+  const el = document.getElementById('look-ajuste-info');
+  if (!el) return;
+  if (!slot) {                       // info del propio NEXUS
+    const c = TEMA.cuerpo_t;
+    el.textContent = 'nexus: x ' + c.x.toFixed(1) + ' · y ' + c.y.toFixed(1) +
+      ' · ×' + c.s.toFixed(2) + '  (arrastra el cuerpo = mover · rueda = tamaño)' + HINT;
+    return;
+  }
+  const a = TEMA.ajuste[slot];
+  el.textContent = (SLOT_NOM[slot] || slot) + ': x ' + a.x.toFixed(1) +
+    ' · y ' + a.y.toFixed(1) + ' · ×' + a.s.toFixed(2) +
+    ' · ↻ ' + Math.round(a.r || 0) + '°' + HINT;
+}
+/* si algo queda al lado, NEXUS se corre para que todo quede centrado
+   en el viewBox (centro 50,33): recalcula cuerpo.x/y */
+function recenter() {
+  const s = TEMA.cuerpo_t.s || 1;
+  let x0 = 0, y0 = 0, x1 = 100, y1 = 66;
+  Object.keys(COSM_OPTS).forEach(slot => {
+    const activo = TEMA.png[slot] || (TEMA.cosmeticos[slot] !== 'ninguno');
+    if (!activo) return;
+    const a = TEMA.ajuste[slot], A = COSM_ANCHOR[slot];
+    const m = 14 * (a.s || 1);
+    x0 = Math.min(x0, A.x + a.x - m); x1 = Math.max(x1, A.x + a.x + m);
+    y0 = Math.min(y0, A.y + a.y - m); y1 = Math.max(y1, A.y + a.y + m);
+  });
+  const ucx = (x0 + x1) / 2, ucy = (y0 + y1) / 2;
+  TEMA.cuerpo_t.x = Math.max(-400, Math.min(400, -s * (ucx - 50)));
+  TEMA.cuerpo_t.y = Math.max(-400, Math.min(400, -s * (ucy - 33)));
+}
+function initPreviewAjuste() {
+  const prev = document.getElementById('m-preview');
+  if (!prev) return;
+  let drag = null;
+  prev.addEventListener('pointerdown', ev => {
+    ev.preventDefault();
+    const p = svgPunto(prev, ev);
+    const g = ev.target.closest && ev.target.closest('.cosm');
+    if (g && g.dataset.slot) {                 // clic ENCIMA de un cosmético
+      sel = {slot: g.dataset.slot};
+      const slot = sel.slot;
+      const A = COSM_ANCHOR[slot], a = TEMA.ajuste[slot];
+      drag = {slot, g, gx: p.x - A.x - a.x, gy: p.y - A.y - a.y};
+    } else if (ev.target.closest && ev.target.closest('.cuerpo-g')) {
+      sel = {body: true};                      // clic encima del cuerpo
+      drag = {body: true, lx: p.x, ly: p.y};
+    } else {
+      sel = null;                              // clic en el vacío: deselecciona
+    }
+    pintarSel();
+    if (drag) { try { prev.setPointerCapture(ev.pointerId); } catch (_) {} }
+  });
+  prev.addEventListener('pointermove', ev => {
+    if (!drag) return;
+    let p = svgPunto(prev, ev);
+    if (drag.body) {
+      TEMA.cuerpo_t.x = Math.max(-400, Math.min(400, TEMA.cuerpo_t.x + (p.x - drag.lx)));
+      TEMA.cuerpo_t.y = Math.max(-400, Math.min(400, TEMA.cuerpo_t.y + (p.y - drag.ly)));
+      const g = prev.querySelector('.cuerpo-g');
+      if (g) g.setAttribute('transform', cuerpoT());   // sin re-render
+      fitPreviewLive();                          // la preview muestra todo
+      p = svgPunto(prev, ev);                    // re-mapear tras el auto-fit
+      drag.lx = p.x; drag.ly = p.y;
+      pintarSel();
+      infoAjuste(null);
+      return;
+    }
+    const A = COSM_ANCHOR[drag.slot], a = TEMA.ajuste[drag.slot];
+    a.x = Math.max(-400, Math.min(400, p.x - A.x - drag.gx));
+    a.y = Math.max(-400, Math.min(400, p.y - A.y - drag.gy));
+    drag.g.setAttribute('transform', cosmT(drag.slot));  // sin re-render
+    fitPreviewLive();
+    p = svgPunto(prev, ev);
+    drag.gx = p.x - A.x - a.x; drag.gy = p.y - A.y - a.y; // estable tras el fit
+    pintarSel();
+    infoAjuste(drag.slot);
+  });
+  const fin = () => {
+    if (!drag) return;
+    if (!drag.body) recenter();     // algo al lado → NEXUS se corre y centra
+    aplicarTema(TEMA);              // re-render oficial (auto-fit + selección)
+    guardarLook();                  // y se guarda
+    drag = null;
+  };
+  prev.addEventListener('pointerup', fin);
+  prev.addEventListener('pointercancel', fin);
+  prev.addEventListener('wheel', ev => {
+    if (!sel) return;               // sin selección no se mueve NADA
+    ev.preventDefault();
+    if (sel.body) {                 // rueda sobre el cuerpo = tamaño de NEXUS
+      const f = ev.deltaY < 0 ? 1.12 : 0.89;
+      TEMA.cuerpo_t.s = Math.max(0.1, Math.min(10, TEMA.cuerpo_t.s * f));
+      aplicarTema(TEMA);
+      infoAjuste(null);
+    } else {                        // rueda sobre el cosmético seleccionado
+      const a = TEMA.ajuste[sel.slot];
+      if (ev.shiftKey)   // Mayús+rueda = girar
+        a.r = Math.max(-180, Math.min(180, (a.r || 0) + (ev.deltaY < 0 ? 15 : -15)));
+      else               // rueda = tamaño
+        a.s = Math.max(0.05, Math.min(10, a.s * (ev.deltaY < 0 ? 1.12 : 0.89)));
+      recenter();
+      aplicarTema(TEMA);
+      infoAjuste(sel.slot);
+    }
+    guardarLook();
+  }, {passive: false});
+  prev.addEventListener('dblclick', ev => {
+    const g = ev.target.closest && ev.target.closest('.cosm');
+    if (g && g.dataset.slot) {
+      TEMA.ajuste[g.dataset.slot] = {x:0, y:0, s:1, r:0};
+      recenter();
+      aplicarTema(TEMA);
+      infoAjuste(g.dataset.slot);
+    } else {
+      TEMA.cuerpo_t = {x:0, y:0, s:1};
+      aplicarTema(TEMA);
+      infoAjuste(null);
+    }
+    guardarLook();
+  });
+}
 function construirEditorLook() {
+  /* chips de forma del cuerpo y de set de animación */
+  const cf = document.getElementById('chips-forma');
+  if (cf) {
+    cf.innerHTML = '';
+    FORMAS_OPTS.forEach(([v, nom]) => {
+      const b = document.createElement('button');
+      b.className = 'chip-cosm';
+      b.dataset.forma = v;
+      b.textContent = nom;
+      b.addEventListener('click', () => {
+        TEMA.forma = v;
+        aplicarTema(TEMA);
+        sincronizarControlesLook();
+        guardarLook();
+      });
+      cf.appendChild(b);
+    });
+  }
+  const ca = document.getElementById('chips-anim');
+  if (ca) {
+    ca.innerHTML = '';
+    ANIM_OPTS.forEach(([v, nom]) => {
+      const b = document.createElement('button');
+      b.className = 'chip-cosm';
+      b.dataset.anim = v;
+      b.textContent = nom;
+      b.addEventListener('click', () => {
+        TEMA.anim = v;
+        aplicarTema(TEMA);
+        sincronizarControlesLook();
+        guardarLook();
+      });
+      ca.appendChild(b);
+    });
+  }
   Object.keys(COSM_OPTS).forEach(slot => {
     const cont = document.getElementById('chips-' + slot);
     if (!cont) return;
@@ -1168,8 +1851,42 @@ function construirEditorLook() {
       });
       cont.appendChild(b);
     });
+    const col = document.getElementById('colc-' + slot);   // color del cosmético
+    if (col) col.addEventListener('input', () => {
+      TEMA.cosm_color[slot] = col.value;
+      aplicarTema(TEMA);
+      sincronizarControlesLook();
+      guardarLook();
+    });
+    const btnPng = document.getElementById('png-' + slot);  // subir PNG
+    const file = document.getElementById('file-' + slot);
+    const btnQ = document.getElementById('pngq-' + slot);   // quitar PNG
+    if (btnPng && file) {
+      btnPng.addEventListener('click', () => file.click());
+      file.addEventListener('change', () => {
+        procesarPng(slot, file.files && file.files[0]);
+        file.value = '';
+      });
+    }
+    if (btnQ) btnQ.addEventListener('click', () => {
+      TEMA.png[slot] = '';
+      aplicarTema(TEMA);
+      sincronizarControlesLook();
+      guardarLook();
+    });
+    const gira = d => {                       // girar el slot (orientación)
+      const a = TEMA.ajuste[slot];
+      a.r = Math.max(-180, Math.min(180, (a.r || 0) + d));
+      aplicarTema(TEMA);
+      infoAjuste(slot);
+      guardarLook();
+    };
+    const rl = document.getElementById('rotl-' + slot);
+    const rr = document.getElementById('rotr-' + slot);
+    if (rl) rl.addEventListener('click', () => gira(-15));
+    if (rr) rr.addEventListener('click', () => gira(15));
   });
-  ['cuerpo','cuerpo2','ojos','notch','acento'].forEach(k => {
+  COLORES.forEach(k => {
     const inp = document.getElementById('col-' + k);
     if (!inp) return;
     inp.addEventListener('input', () => {
@@ -1179,27 +1896,116 @@ function construirEditorLook() {
       guardarLook();
     });
   });
-  document.querySelectorAll('.preset').forEach(b =>
-    b.addEventListener('click', () => {
-      aplicarTema(PRESETS[b.dataset.preset] || TEMA_DEF);
-      sincronizarControlesLook();
-      guardarLook();
-    }));
+  pintarPresets();
+  const inpPreset = document.getElementById('inp-preset-nombre');
+  const btnPreset = document.getElementById('btn-guardar-preset');
+  if (btnPreset) btnPreset.addEventListener('click', () => {
+    const nom = (inpPreset && inpPreset.value || '').trim();
+    if (!nom) return;
+    pywebview.api.guardar_preset(nom).then(l => {
+      if (inpPreset) inpPreset.value = '';
+      pintarPresetsUsu(l);
+    });
+  });
+  if (inpPreset) inpPreset.addEventListener('keydown', e => {
+    if (e.key === 'Enter') btnPreset.click();
+  });
   const reset = document.getElementById('btn-look-reset');
   if (reset) reset.addEventListener('click', () => {
     aplicarTema(TEMA_DEF);
     sincronizarControlesLook();
     guardarLook();
   });
+  const rng = document.getElementById('rng-notch');
+  if (rng) rng.addEventListener('input', () => {
+    TEMA.notch_s = (+rng.value) / 100;
+    aplicarTema(TEMA);
+    sincronizarControlesLook();
+    guardarLook();
+  });
+  const rp = document.getElementById('btn-reset-pos');   // reset POSICIÓN
+  if (rp) rp.addEventListener('click', () => {
+    Object.keys(TEMA.ajuste).forEach(k => {
+      TEMA.ajuste[k].x = 0; TEMA.ajuste[k].y = 0; TEMA.ajuste[k].r = 0;
+    });
+    TEMA.cuerpo_t.x = 0; TEMA.cuerpo_t.y = 0;
+    aplicarTema(TEMA);
+    sincronizarControlesLook();
+    infoAjuste(null);
+    guardarLook();
+  });
+  const rt = document.getElementById('btn-reset-tam');   // reset TAMAÑO
+  if (rt) rt.addEventListener('click', () => {
+    Object.keys(TEMA.ajuste).forEach(k => { TEMA.ajuste[k].s = 1; });
+    TEMA.cuerpo_t.s = 1;
+    aplicarTema(TEMA);
+    sincronizarControlesLook();
+    infoAjuste(null);
+    guardarLook();
+  });
+  construirTams();
+  construirHpos();
+  initPreviewAjuste();
+}
+/* posición fija horizontal: izquierda / centro / derecha (ventanas
+   estáticas, así que eliges siempre el mismo sitio) */
+function marcarHpos(h) {
+  const v = ['izquierda','centro','derecha'].includes(h) ? h : 'centro';
+  document.querySelectorAll('#hpos-marcas .chip-cosm').forEach(b =>
+    b.classList.toggle('act', b.dataset.hpos === v));
+}
+function construirHpos() {
+  const cont = document.getElementById('hpos-marcas');
+  if (!cont) return;
+  cont.innerHTML = '';
+  [['izquierda','◀ Izquierda'],['centro','● Centro'],['derecha','▶ Derecha']]
+    .forEach(([v, nom]) => {
+      const b = document.createElement('button');
+      b.className = 'chip-cosm';
+      b.dataset.hpos = v;
+      b.textContent = nom;
+      b.addEventListener('click', () => {
+        pywebview.api.fijar_hpos(v).then(() => {
+          aplicarHpos(v);
+          marcarHpos(v);
+        });
+      });
+      cont.appendChild(b);
+    });
+  marcarHpos(hposActual);
+}
+function pintarUpdate(u, ver) {
+  const va = document.getElementById('ver-app');
+  if (va && ver) va.textContent = 'v' + ver;
+  const est = document.getElementById('upd-estado');
+  const btnI = document.getElementById('btn-upd-instalar');
+  if (!est) return;
+  const actual = (u && u.actual) || ver || '?';
+  if (u && u.hay) {
+    est.textContent = '🎉 Hay update v' + u.version + ' (tienes v' + actual +
+      ', origen: ' + (u.origen || 'local') + ') — un clic y se instala solo.';
+    if (btnI) {
+      btnI.style.display = '';
+      btnI.textContent = '⬇ Instalar v' + u.version + ' y reiniciar';
+    }
+  } else {
+    est.textContent = '✅ Estás al día (v' + actual + ').' +
+      (u && u.error ? '  [' + u.error + ']' : '');
+    if (btnI) btnI.style.display = 'none';
+  }
 }
 function pintarAjustes() {
   pywebview.api.ajustes().then(a => {
     marcarPos(a.pos);
     pintarMonitores(a);
+    if (a.tam) marcarTam(a.tam);
     pintarVoces(a);
+    marcarHpos(a.hpos);
+    pintarUpdate(a.update, a.version);
     document.getElementById('inp-llm-key').value = a.llm_api_key || '';
     document.getElementById('inp-llm-model').value = a.llm_model || '';
     document.getElementById('inp-fish-key').value = a.fish_api_key || '';
+    pintarPresetsUsu(a.presets || []);
   }).catch(() => {});
 }
 document.getElementById('pos-arriba').addEventListener('click', () => {
@@ -1242,6 +2048,16 @@ document.getElementById('inp-voz-nombre').addEventListener('keydown', e => {
 });
 document.getElementById('btn-probar-voz').addEventListener('click', () => {
   pywebview.api.probar_voz();
+});
+document.getElementById('btn-upd-buscar').addEventListener('click', () => {
+  const est = document.getElementById('upd-estado');
+  if (est) est.textContent = 'buscando…';
+  pywebview.api.buscar_update().then(u => pintarUpdate(u, u && u.actual));
+});
+document.getElementById('btn-upd-instalar').addEventListener('click', () => {
+  const est = document.getElementById('upd-estado');
+  if (est) est.textContent = 'instalando el update… NEXUS se reinicia solo.';
+  pywebview.api.instalar_update();
 });
 document.getElementById('btn-adj').addEventListener('click', ev => {
   ev.stopPropagation();           // que no dispare el «abrir panel» del notch
@@ -1454,7 +2270,8 @@ let ultimaFirma = '';
       const e = await pywebview.api.estado();
       // solo tocamos el DOM si el estado CAMBIÓ (antes se reescribía
       // className/textContent cada 130 ms en las dos ventanas)
-      const firma = [e.modo, e.aviso, e.crono, e.pos, e.ir_a,
+      const firma = [e.modo, e.aviso, e.crono, e.pos, e.ir_a, e.tam, e.hpos,
+                     e.version, JSON.stringify(e.update || null),
                      JSON.stringify(e.tema || null)].join('|');
       if (firma !== ultimaFirma) {
         ultimaFirma = firma;

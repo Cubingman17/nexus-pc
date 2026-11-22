@@ -93,6 +93,10 @@ EMAIL_APP_PASS = os.environ.get("EMAIL_APP_PASS", "")   # la contraseña de apli
 # ══ Interfaz NEXUS ═════════════════════════════════════════════════
 NOTCH = True                # True = pastilla arriba (clic para abrir) | False = ventana normal
 HOTKEY = "ctrl+alt+space"   # despierta a NEXUS desde CUALQUIER app (requiere: pip install keyboard)
+
+# Auto-update del .exe: URL de un manifiesto JSON {"version": "1.0.1", "url": "https://…/nexus.exe"}.
+# Vacío = solo vigila la carpeta del .exe y Descargas buscando un nexus*.exe más nuevo.
+UPDATE_MANIFEST_URL = ""
 SHOW_TRANSCRIPT = False     # True = mostrar en pantalla lo que dices | False = solo la consola
 
 # ══ Parte del mañana (briefing) ═══════════════════════════════════

@@ -9,6 +9,7 @@ Y audio.forzar() despierta el asistente al instante (hotkey o clic).
 """
 import difflib
 import queue
+import re
 import threading
 import time
 import unicodedata
@@ -114,9 +115,12 @@ def _get_tiny():
 
 
 def _normalizar(texto):
-    """minúsculas y sin tildes: 'NéXus' → 'nexus'."""
+    """minúsculas, sin tildes y SIN puntuación: '¡Voje Nexus!' → ' voje nexus '.
+    v31: la puntuación pegada rompía el match fuzzy («exus!» vs «nexus»
+    daba 0.80 < 0.85 y el wake en español no disparaba)."""
     t = unicodedata.normalize("NFD", (texto or "").lower())
-    return "".join(c for c in t if unicodedata.category(c) != "Mn")
+    t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^\w\s]", " ", t)
 
 
 def _frases_wake():
@@ -130,19 +134,22 @@ def _frases_wake():
 
 
 def _match_wake(dicho, objetivo):
-    """¿El texto contiene un wake? ENDURECIDO (v30): antes era tan
-    difuso que «next» en una canción o «jardín» despertaban a NEXUS
-    solos. Ahora solo pasa si:
-    - el wake aparece EXACTO como palabra completa («conexo» ya no
-      cuenta: exige límites de palabra), o
-    - un token empieza por casi TODO el wake («nexu…», «jarv…»), o
-    - un token es casi idéntico (≥0.85: «javis»≈«jarvis» sí,
-      «marvis» no)."""
-    import re
+    """¿El texto contiene un wake? ENDURECIDO (v30) y afinado (v31):
+    - palabra completa exacta («conexo» ya no cuenta: límites de palabra), o
+    - el wake como SUBCADENA de un token de 5+ letras («paynexus» contiene
+      «nexus»; con 4 letras no, para que «conexo» no cuente «nexo»), o
+    - un token que empieza por casi todo el wake («nexu…», «jarv…»), o
+    - fuzzy: ratio ≥0.85 («javis»≈«jarvis» sí), o ≥0.83 si además
+      comparten las 3 primeras letras («jarbis»≈«jarvis» sí, «marvis» no).
+    Sigue sin disparar con «next», «jardín», «anexo», «marvis»."""
     for f in objetivo:
         if len(f) >= 4 and re.search(rf"\b{re.escape(f)}\b", dicho):
             return f
     toks = dicho.split()
+    for tok in toks:
+        for f in objetivo:
+            if len(f) >= 5 and f in tok:
+                return f
     for tok in toks:
         for f in objetivo:
             if (len(f) >= 4 and tok.startswith(f[:4])
@@ -150,12 +157,11 @@ def _match_wake(dicho, objetivo):
                 return f
     for tok in toks:
         for f in objetivo:
-            # similitud solo para wakes de 5+ letras: con 4 («nexo»)
-            # hasta «anexo» parecía suficiente y despertaba solo
-            if (len(f) >= 5 and len(tok) >= 4
-                    and difflib.SequenceMatcher(None, tok, f).ratio()
-                    >= 0.85):
-                return f
+            if len(f) >= 5 and len(tok) >= 4:
+                r = difflib.SequenceMatcher(None, tok, f).ratio()
+                if r >= 0.85 or (len(f) >= 6 and r >= 0.83
+                                 and tok.startswith(f[:3])):
+                    return f
     return None
 
 

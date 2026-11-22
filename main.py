@@ -15,6 +15,15 @@ import sys
 import threading
 import time
 
+# Consola en cp1252 (terminal sin «chcp 65001», p. ej. Git Bash o VS Code)
+# rompía los print con emojis (UnicodeEncodeError) y mataba el hilo del
+# pipeline ANTES de que escuchara nada → «no me detecta la voz»:
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 
 def _pub(novedades, linea):
     """Manda una línea al registro de la interfaz (si está en modo GUI)."""
@@ -147,6 +156,10 @@ def main():
     if "--briefing" in sys.argv:
         import briefing
         briefing.briefing()  # resume el día y sale
+        return
+    if "--version" in sys.argv:
+        import version
+        print(f"{version.APP_NAME} v{version.APP_VERSION}")
         return
     if "--diagnostico" in sys.argv or "--test-mic" in sys.argv:
         import diagnostico

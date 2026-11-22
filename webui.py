@@ -7,10 +7,12 @@ el puente: expone las herramientas a JavaScript y ajusta la
 ventana (el notch pegado al borde superior o a la barra de tareas,
 según la pestaña Ajustes; el panel se despliega del lado contrario).
 """
+import copy
 import ctypes
 import json
 import os
 import re
+import sys
 import threading
 import time
 from ctypes import wintypes
@@ -28,10 +30,11 @@ try:
 except Exception:
     pass
 
-ANCHO = 800
-ALTO_NOTCH = 44                 # ventana del notch: FIJA (470×44)
-ALTO_PANEL = 500                # ventana del panel: FIJA (800×500)
-ANCHO_NOTCH = 470               # plegada: solo lo que ocupa la isla
+ANCHO = 800                     # tamaño base (referencia; el real sale de _tam_panel())
+ALTO_NOTCH = 88                 # ventana del notch: FIJA y holgada para que la
+                                # pastilla escalada (hasta 220%) no se corte
+ALTO_PANEL = 500                # alto base del panel (el real sale de _tam_panel())
+ANCHO_NOTCH = 720               # idem en ancho (la isla escala con notch_s)
 
 CHAT = []                       # la conversación, para el panel web
 _ventana = None                 # la ventana del notch
@@ -42,17 +45,107 @@ _IR_A = {"sec": "", "t": 0.0}   # el engranaje manda: abrir en Ajustes
 _PID = os.getpid()              # mis ventanas, no las de otra copia
 _AJUSTES_PATH = Path.home() / "nexus_ajustes.json"
 
+import version                  # APP_VERSION: la versión del .exe
+_UPDATE = {"hay": False, "actual": version.APP_VERSION}   # último chequeo
+_NOVEDADES = None               # cola del pipeline (para avisar updates)
+
+
+def _ruta_base():
+    """Carpeta raíz de recursos: en el .exe onefile los datos viven en
+    el directorio temporal de desempaquetado (sys._MEIPASS)."""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent
+
 # ── look de la interfaz (pestaña Ajustes → «Mascota y apariencia») ──
 # Colores de la mascota (degradado del cuerpo), de los ojos, del notch y
 # el acento (brillos/bordes). Los cosméticos van por slot con valores de
 # lista blanca para que un JSON raro nunca rompa el SVG.
-_TEMA_DEF = {"cuerpo": "#F8F4E8", "cuerpo2": "#E1D8C1", "ojos": "#141414",
-             "notch": "#05070d", "acento": "#38bdf8",
-             "cosmeticos": {"sombrero": "ninguno", "gafas": "ninguno",
-                            "extra": "ninguno"}}
 _COSM_OPTS = {"sombrero": ("ninguno", "gorra", "corona", "copa", "orejas"),
               "gafas": ("ninguno", "sol", "redondas", "monoculo"),
-              "extra": ("ninguno", "mono", "bigotes", "corbata")}
+              "extra": ("ninguno", "mono", "bigotes", "corbata"),
+              "mano": ("ninguno",)}
+_PNG_MAX = 220_000          # dataURL tope por PNG subido (se reescala a 128 px)
+_ANIM_OPTS = ("clasico", "rebote", "flotar", "pulso", "turbo", "lento")
+_FORMAS = ("original", "redonda", "pildora", "cuadrada", "diamante")
+
+
+def _clamp_num(n, lo, hi, base):
+    try:
+        return round(max(lo, min(hi, float(n))), 1)
+    except Exception:
+        return base
+
+
+def _norm_xy_s(v, s_lo, s_hi, lim=400):
+    """{x, y, s} saneado: x/y en ±lim (sin límites prácticos), s en
+    [s_lo, s_hi], default centrado."""
+    v = v if isinstance(v, dict) else {}
+    return {"x": _clamp_num(v.get("x"), -lim, lim, 0.0),
+            "y": _clamp_num(v.get("y"), -lim, lim, 0.0),
+            "s": _clamp_num(v.get("s"), s_lo, s_hi, 1.0)}
+
+
+def _norm_ajuste(v):
+    """Ajuste fino de cada cosmético (unidades del viewBox 100×66):
+    {slot: {"x", "y", "s", "r"}} — lo que se arrastra en la vista previa.
+    Sin límites: x/y ±400, s 0.05..10. Basura → default (centrado, 1×)."""
+    v = v if isinstance(v, dict) else {}
+    out = {}
+    for k in _COSM_OPTS:
+        a = _norm_xy_s(v.get(k), 0.05, 10.0)
+        a["r"] = _clamp_num((v.get(k) or {}).get("r"), -180, 180, 0.0)
+        out[k] = a
+    return out
+
+
+_TEMA_DEF = {"cuerpo": "#F8F4E8", "cuerpo2": "#E1D8C1", "ojos": "#141414",
+             "notch": "#05070d", "acento": "#38bdf8",
+             "cosm_color": {"sombrero": "", "gafas": "", "extra": "",
+                            "mano": ""},
+             "png": {"sombrero": "", "gafas": "", "extra": "", "mano": ""},
+             "ajuste": _norm_ajuste(None),
+             # OJO: la posición/tamaño de NEXUS es "cuerpo_t" — «cuerpo» ya
+             # es el COLOR del cuerpo (una clave duplicada hacía que el dict
+             # pisara el color y el degradado quedara negro arriba)
+             "cuerpo_t": {"x": 0.0, "y": 0.0, "s": 1.0},
+             "notch_s": 1.0,                          # escala de la pastilla
+             "anim": "clasico",                       # set de animaciones
+             "forma": "original",                     # forma de la mascota
+             "panel": "#0a1120", "card": "#101a2e",   # más colores custom
+             "borde": "#1e3a5f", "texto": "#f8fafc",
+             "cosmeticos": {"sombrero": "ninguno", "gafas": "ninguno",
+                            "extra": "ninguno", "mano": "ninguno"}}
+
+
+def _norm_hex_opt(v):
+    """#RRGGBB o vacío («» = seguir al acento). Cualquier otra cosa → «»."""
+    if isinstance(v, str) and (v == "" or re.fullmatch(r"#[0-9a-fA-F]{6}", v)):
+        return v.lower() if v else ""
+    return ""
+
+
+def _norm_png(v):
+    """Solo dataURL de imagen pequeña (el JS la reescala a 128 px antes
+    de guardar); cualquier otra cosa → «»."""
+    if (isinstance(v, str) and len(v) <= _PNG_MAX
+            and re.match(r"data:image/(png|webp);base64,[A-Za-z0-9+/=]+$", v)):
+        return v
+    return ""
+
+
+def _norm_presets(p):
+    """[{nombre, tema}] saneado: máx. 24, nombre ≤ 30, sin duplicados."""
+    if not isinstance(p, list):
+        return []
+    vistos, out = set(), []
+    for x in p[:24]:
+        if isinstance(x, dict) and isinstance(x.get("nombre"), str):
+            nom = x["nombre"].strip()[:30]
+            if nom and nom not in vistos:
+                vistos.add(nom)
+                out.append({"nombre": nom, "tema": _norm_tema(x.get("tema"))})
+    return out
 
 
 def _norm_color(v, base):
@@ -62,22 +155,55 @@ def _norm_color(v, base):
 
 
 def _norm_tema(t):
-    """Tema válido y completo: mezcla lo recibido con los defaults."""
+    """Tema válido y completo: mezcla lo recibido con los defaults.
+    cosm_color: color independiente por slot («» = seguir al acento).
+    png: dataURL del cosmético subido por slot («» = usar el dibujado)."""
     t = t if isinstance(t, dict) else {}
     cosm = t.get("cosmeticos")
     cosm = cosm if isinstance(cosm, dict) else {}
+    cc = t.get("cosm_color")
+    cc = cc if isinstance(cc, dict) else {}
+    png = t.get("png")
+    png = png if isinstance(png, dict) else {}
     return {"cuerpo": _norm_color(t.get("cuerpo"), _TEMA_DEF["cuerpo"]),
             "cuerpo2": _norm_color(t.get("cuerpo2"), _TEMA_DEF["cuerpo2"]),
             "ojos": _norm_color(t.get("ojos"), _TEMA_DEF["ojos"]),
             "notch": _norm_color(t.get("notch"), _TEMA_DEF["notch"]),
             "acento": _norm_color(t.get("acento"), _TEMA_DEF["acento"]),
+            "panel": _norm_color(t.get("panel"), _TEMA_DEF["panel"]),
+            "card": _norm_color(t.get("card"), _TEMA_DEF["card"]),
+            "borde": _norm_color(t.get("borde"), _TEMA_DEF["borde"]),
+            "texto": _norm_color(t.get("texto"), _TEMA_DEF["texto"]),
+            "anim": t.get("anim") if t.get("anim") in _ANIM_OPTS else "clasico",
+            "forma": t.get("forma") if t.get("forma") in _FORMAS else "original",
+            "cosm_color": {k: _norm_hex_opt(cc.get(k)) for k in _COSM_OPTS},
+            "png": {k: _norm_png(png.get(k)) for k in _COSM_OPTS},
+            "ajuste": _norm_ajuste(t.get("ajuste")),
+            # migración: en temas viejos la posición vivía en "cuerpo" (dict)
+            "cuerpo_t": _norm_xy_s(
+                t.get("cuerpo_t") if t.get("cuerpo_t") is not None
+                else (t.get("cuerpo") if isinstance(t.get("cuerpo"), dict) else None),
+                0.1, 10.0),
+            "notch_s": _clamp_num(t.get("notch_s"), 0.3, 2.2, 1.0),
             "cosmeticos": {k: (cosm.get(k) if cosm.get(k) in opts
                                else "ninguno")
                            for k, opts in _COSM_OPTS.items()}}
 
 
+# Tamaños del panel («espacio de trabajo»): (ancho, alto) de la ventana.
+# OJO: el tamaño solo se fija AL CREAR la ventana — un resize en caliente
+# rompe la transparencia de WebView2 (por eso las ventanas son fijas).
+_TAM_PANEL = {"compacto": (800, 500), "grande": (1080, 600),
+              "ancho": (1320, 640)}
+
 _AJ = {"pos": "arriba", "monitor": 0,   # lo que salva la pestaña Ajustes
-       "tema": _norm_tema(None)}
+       "tema": _norm_tema(None), "presets": [], "tam": "grande",
+       "hpos": "centro"}                # centro | izquierda | derecha
+_HPOS_OK = ("centro", "izquierda", "derecha")
+
+
+def _tam_panel():
+    return _TAM_PANEL.get(_AJ.get("tam"), _TAM_PANEL["grande"])
 
 
 def _patch_chat():
@@ -136,6 +262,11 @@ def _leer_ajustes():
     else:
         datos["voces"] = _voces_base()
     datos["tema"] = _norm_tema(datos.get("tema"))
+    datos["presets"] = _norm_presets(datos.get("presets"))
+    if datos.get("tam") not in _TAM_PANEL:
+        datos["tam"] = "grande"
+    if datos.get("hpos") not in _HPOS_OK:
+        datos["hpos"] = "centro"
     return datos
 
 
@@ -298,6 +429,10 @@ class Api:
         return {"modo": e["modo"], "aviso": e["aviso"],
                 "crono": e["crono"], "tu": e["tu"], "jarvis": e["jarvis"],
                 "pos": _AJ["pos"], "ir_a": ira,
+                "tam": _AJ.get("tam", "grande"),
+                "hpos": _AJ.get("hpos", "centro"),
+                "version": version.APP_VERSION,
+                "update": _UPDATE if _UPDATE.get("hay") else None,
                 "tema": _AJ.get("tema") or _TEMA_DEF}
 
     def limpiar_aviso(self):
@@ -471,7 +606,12 @@ class Api:
                 "llm_api_key": getattr(config, "LLM_API_KEY", ""),
                 "llm_model": getattr(config, "LLM_MODEL", ""),
                 "fish_api_key": getattr(config, "FISH_API_KEY", ""),
-                "voces": self._voces_ui()}
+                "voces": self._voces_ui(),
+                "tam": _AJ.get("tam", "grande"),
+                "hpos": _AJ.get("hpos", "centro"),
+                "version": version.APP_VERSION,
+                "update": _UPDATE if _UPDATE.get("hay") else None,
+                "presets": copy.deepcopy(_AJ.get("presets", []))}
 
     def tema(self):
         """El look actual (mascota, notch, acento, cosméticos) para que
@@ -492,6 +632,37 @@ class Api:
         estado.set_aviso("🎉 Look actualizado")
         return "ok"
 
+    def guardar_preset(self, nombre):
+        """Pestaña Ajustes → «＋ Guardar actual»: el look VIGENTE queda
+        como preset con nombre (si el nombre ya existía, se reemplaza).
+        Devuelve la lista actualizada de presets del usuario."""
+        nom = str(nombre or "").strip()[:30]
+        if not nom:
+            return _AJ.get("presets", [])
+        presets = [p for p in _AJ.get("presets", []) if p["nombre"] != nom]
+        presets.append({"nombre": nom,
+                        "tema": copy.deepcopy(_AJ.get("tema") or _TEMA_DEF)})
+        presets = _norm_presets(presets)
+        datos = _leer_ajustes()
+        datos["presets"] = presets
+        _escribir_ajustes(datos)
+        _AJ["presets"] = presets
+        estado.set_aviso(f"🎉 Preset «{nom}» guardado")
+        return copy.deepcopy(presets)
+
+    def borrar_preset(self, nombre):
+        """Quita un preset del usuario. Devuelve la lista actualizada."""
+        nom = str(nombre or "").strip()
+        antes = _AJ.get("presets", [])
+        presets = [p for p in antes if p["nombre"] != nom]
+        if len(presets) != len(antes):
+            datos = _leer_ajustes()
+            datos["presets"] = presets
+            _escribir_ajustes(datos)
+            _AJ["presets"] = presets
+            estado.set_aviso("🎉 Preset eliminado")
+        return copy.deepcopy(presets)
+
     def fijar_posicion(self, pos):
         """'arriba': notch pegado al borde superior, menú hacia abajo.
         'barra': integrado en la barra de tareas (solo ojos y estado),
@@ -502,6 +673,45 @@ class Api:
         _escribir_ajustes(datos)
         _reposicionar()
         return "ok"
+
+    # ── actualizaciones (solo con sentido corriendo como .exe) ─────
+    def estado_update(self):
+        return dict(_UPDATE)
+
+    def buscar_update(self):
+        """Busca un nexus.exe más nuevo (carpeta del exe, Descargas,
+        manifiesto remoto) y devuelve el resultado."""
+        try:
+            import updater
+            r = updater.buscar_update()
+            if r.get("hay"):
+                _UPDATE.update(r)
+            else:
+                _UPDATE["hay"] = False
+                _UPDATE["actual"] = version.APP_VERSION
+            return dict(_UPDATE)
+        except Exception as exc:
+            return {"hay": False, "actual": version.APP_VERSION,
+                    "error": f"{type(exc).__name__}: {exc}"}
+
+    def instalar_update(self):
+        """Reemplaza el .exe por el update encontrado y reinicia NEXUS."""
+        try:
+            import updater
+            r = updater.instalar_update(_UPDATE.get("ruta", ""))
+            if r.get("ok"):
+                def _morir():          # deja ver el aviso un segundo
+                    time.sleep(1.2)
+                    try:
+                        import webview
+                        webview.destroy_all_windows()
+                    except Exception:
+                        pass
+                    os._exit(0)
+                threading.Timer(0.1, _morir).start()
+            return r
+        except Exception as exc:
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
     def fijar_monitor(self, indice):
         """¿En cuál pantalla vive NEXUS? 0, 1, 2…"""
@@ -515,6 +725,34 @@ class Api:
             datos["monitor"] = i
             _escribir_ajustes(datos)
             _reposicionar()
+        return "ok"
+
+    def fijar_hpos(self, hpos):
+        """Posición horizontal de las ventanas (arriba o abajo da igual):
+        'centro', 'izquierda' o 'derecha'. Se aplica YA y queda guardado."""
+        hpos = str(hpos or "")
+        if hpos not in _HPOS_OK:
+            return "ok"
+        _AJ["hpos"] = hpos
+        datos = _leer_ajustes()
+        datos["hpos"] = hpos
+        _escribir_ajustes(datos)
+        _reposicionar()
+        estado.set_aviso(f"🎉 NEXUS a la {hpos}")
+        return "ok"
+
+    def fijar_tam(self, tam):
+        """Tamaño del panel («compacto» 800×500, «grande» 1080×600,
+        «ancho» 1320×640). Se aplica AL REINICIAR: cambiar el tamaño en
+        caliente rompería la transparencia de WebView2."""
+        tam = str(tam or "")
+        if tam not in _TAM_PANEL:
+            return "ok"
+        _AJ["tam"] = tam
+        datos = _leer_ajustes()
+        datos["tam"] = tam
+        _escribir_ajustes(datos)
+        estado.set_aviso(f"🎉 Panel {tam}: se aplica al reiniciar")
         return "ok"
 
     def _aplicar_config(self, clave, valor):
@@ -756,21 +994,35 @@ def _vigia():
             _ocultar_panel()
 
 
-def _mover(titulo, y_fisico, area=None):
-    """Centra la ventana EXACTAMENTE (solo MUEVE: el resize rompe la
+def _x_window(ancho, area, hpos):
+    """X de una ventana según la posición horizontal pedida:
+    izquierda → pegada a la izquierda, derecha → pegada a la derecha,
+    centro → centrada (default)."""
+    if area:
+        if hpos == "izquierda":
+            return area[0] + 8
+        if hpos == "derecha":
+            return max(area[0], area[2] - 8 - ancho)
+        return area[0] + max(0, ((area[2] - area[0]) - ancho) // 2)
+    sw = ctypes.windll.user32.GetSystemMetrics(0)
+    if hpos == "izquierda":
+        return 8
+    if hpos == "derecha":
+        return max(0, sw - 8 - ancho)
+    return max(0, (sw - ancho) // 2)
+
+
+def _mover(titulo, y_fisico, area=None, hpos="centro"):
+    """Coloca la ventana EXACTAMENTE (solo MUEVE: el resize rompe la
     transparencia de WebView2). Usa el ancho REAL de la ventana;
-    'area' = (l, t, r, b) del monitor donde centrarse."""
+    'area' = (l, t, r, b) del monitor donde colocarse."""
     hwnd = _hwnd(titulo)
     if not hwnd:
         return
     r = _RECT()
     ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(r))
     ancho = r.r - r.l
-    if area:
-        x = area[0] + max(0, ((area[2] - area[0]) - ancho) // 2)
-    else:
-        sw = ctypes.windll.user32.GetSystemMetrics(0)
-        x = max(0, (sw - ancho) // 2)
+    x = _x_window(ancho, area, hpos)
     ctypes.windll.user32.SetWindowPos(
         hwnd, None, x, y_fisico, 0, 0, 0x0001)   # SWP_NOSIZE
 
@@ -788,12 +1040,12 @@ def _reposicionar():
     alto_n = int(ALTO_NOTCH * esc)
     if _AJ["pos"] == "barra":
         y_notch = scr[3] - alto_n                    # franja de la barra
-        y_panel = wrk[3] - int(ALTO_PANEL * esc)     # menú hacia arriba
+        y_panel = wrk[3] - int(_tam_panel()[1] * esc)   # menú hacia arriba
     else:
         y_notch = scr[1]                             # borde superior
         y_panel = scr[1] + alto_n                    # menú hacia abajo
-    _mover("NEXUS", y_notch, scr)
-    _mover("NEXUS panel", y_panel, scr)
+    _mover("NEXUS", y_notch, scr, _AJ.get("hpos", "centro"))
+    _mover("NEXUS panel", y_panel, scr, _AJ.get("hpos", "centro"))
 
 
 def _pintar_fondo_oscuro():
@@ -849,10 +1101,29 @@ def _ajustes():
         pass
 
 
+def _chequeo_update():
+    """Al arrancar como .exe: tras unos segundos busca un nexus.exe más
+    nuevo y, si hay, avisa en el notch y en la pestaña Ajustes."""
+    if not getattr(sys, "frozen", False):
+        return
+    import updater
+
+    def _callback(r):
+        _UPDATE.update(r)
+        estado.set_aviso(f"🎉 Update v{r['version']} disponible — pestaña Ajustes")
+        if _NOVEDADES is not None:
+            try:
+                _NOVEDADES.put(f"🎉 Update disponible: v{r['version']} (Ajustes)")
+            except Exception:
+                pass
+
+    updater.comprobar_en_segundo_plano(_callback, espera=12)
+
+
 def arrancar(novedades):
     """Dos ventanas: el notch (siempre visible) y el panel (oculto
     hasta que se pide). Sin resizes: la transparencia no se rompe."""
-    global _ventana, _ventana_panel
+    global _ventana, _ventana_panel, _NOVEDADES
     _patch_chat()
     import webview
 
@@ -860,23 +1131,25 @@ def arrancar(novedades):
         _novedades = novedades
 
     api = _Api()
-    ruta = Path(__file__).with_name("web") / "nexus.html"
+    _NOVEDADES = novedades
+    ruta = _ruta_base() / "web" / "nexus.html"
     uri = ruta.as_uri()
 
     # ubicación inicial (píxel LÓGICO, aprox.): el monitor elegido y
     # la posición de la pestaña Ajustes; a los 2,5 s _ajustes() fija
     # las coordenadas físicas exactas
     _AJ.update(_leer_ajustes())
+    ancho_p, alto_p = _tam_panel()          # tamaño pedido en Ajustes
     m = _monitor_elegido()
     scr, wrk = m["pantalla"], m["trabajo"]
     esc = _escala()
-    x_notch = int(round(scr[0] / esc)) + max(0, int(
-        (scr[2] - scr[0]) / esc - ANCHO_NOTCH) // 2)
-    x_panel = int(round(scr[0] / esc)) + max(0, int(
-        (scr[2] - scr[0]) / esc - ANCHO) // 2)
+    hpos = _AJ.get("hpos", "centro")
+    # create_window recibe píxeles LÓGICOS: _x_window da físicos → ÷ esc
+    x_notch = int(round(_x_window(int(ANCHO_NOTCH * esc), scr, hpos) / esc))
+    x_panel = int(round(_x_window(int(ancho_p * esc), scr, hpos) / esc))
     if _AJ["pos"] == "barra":
         y_notch = max(0, int(round(scr[3] / esc)) - ALTO_NOTCH)
-        y_panel = max(0, int(round(wrk[3] / esc)) - ALTO_PANEL)
+        y_panel = max(0, int(round(wrk[3] / esc)) - alto_p)
     else:
         y_notch = int(round(scr[1] / esc))
         y_panel = y_notch + ALTO_NOTCH
@@ -893,11 +1166,12 @@ def arrancar(novedades):
     # el panel: nace OCULTO del lado contrario del notch; mostrar/ocultar
     _ventana_panel = webview.create_window(
         "NEXUS panel", url=uri + "#panel", js_api=api,
-        width=ANCHO, height=ALTO_PANEL,
+        width=ancho_p, height=alto_p,
         x=x_panel, y=y_panel,
-        min_size=(ANCHO, ALTO_PANEL),
+        min_size=(ancho_p, alto_p),
         frameless=True, transparent=True, resizable=False,
         on_top=True, hidden=True, background_color="#000000")
 
     threading.Thread(target=_vigia, daemon=True).start()
+    _chequeo_update()
     webview.start(gui="edgechromium", func=_ajustes, debug=False)

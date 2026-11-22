@@ -34,3 +34,9 @@ nexus_vista_*.jpg
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ═══ build del .exe (PyInstaller) ═══
+dist/
+build/
+*.spec
+*.exe
